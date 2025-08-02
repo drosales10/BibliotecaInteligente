@@ -1,0 +1,38 @@
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 30px;
+  background-color: #20232a;
+  border-bottom: 2px solid #61dafb;
+  color: white;
+}
+
+.header-logo h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #61dafb;
+}
+
+.header-nav {
+  display: flex;
+  gap: 25px;
+}
+
+.nav-link {
+  color: white;
+  text-decoration: none;
+  font-size: 1.1rem;
+  padding: 5px 0;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-bottom-color 0.2s;
+}
+
+.nav-link:hover {
+  color: #61dafb;
+}
+
+.nav-link.active {
+  color: #61dafb;
+  border-bottom-color: #61dafb;
+}

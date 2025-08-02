@@ -6,7 +6,7 @@ import os
 def get_book_by_path(db: Session, file_path: str):
     return db.query(models.Book).filter(models.Book.file_path == file_path).first()
 
-def get_books(db: Session, category: str | None = None, search: str | None = None, skip: int = 0, limit: int = 100):
+def get_books(db: Session, category: str | None = None, search: str | None = None):
     query = db.query(models.Book)
     if category:
         query = query.filter(models.Book.category == category)
@@ -19,7 +19,7 @@ def get_books(db: Session, category: str | None = None, search: str | None = Non
                 models.Book.category.ilike(search_term)
             )
         )
-    return query.order_by(desc(models.Book.id)).offset(skip).limit(limit).all()
+    return query.order_by(desc(models.Book.id)).all()
 
 def get_categories(db: Session) -> list[str]:
     return [c[0] for c in db.query(models.Book.category).distinct().order_by(models.Book.category).all()]

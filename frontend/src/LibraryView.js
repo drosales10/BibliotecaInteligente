@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import './LibraryView.css';
 
 // Hook personalizado para debounce
@@ -15,18 +16,11 @@ const useDebounce = (value, delay) => {
   return debouncedValue;
 };
 
-
 // Componente para la portada (con fallback a genérica)
 const BookCover = ({ src, alt, title }) => {
   const [hasError, setHasError] = useState(false);
-
-  useEffect(() => {
-    setHasError(false); // Resetear el error cuando la imagen cambia
-  }, [src]);
-
-  const handleError = () => {
-    setHasError(true);
-  };
+  useEffect(() => { setHasError(false); }, [src]);
+  const handleError = () => { setHasError(true); };
 
   if (hasError || !src) {
     const initial = title ? title[0].toUpperCase() : '?';
@@ -36,39 +30,26 @@ const BookCover = ({ src, alt, title }) => {
       </div>
     );
   }
-
   return <img src={src} alt={alt} className="book-cover" onError={handleError} />;
 };
 
-
 function LibraryView() {
   const [books, setBooks] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [activeCategory, setActiveCategory] = useState(null);
+  const [searchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-
-  const fetchCategories = useCallback(async () => {
-    try {
-      const response = await fetch('http://localhost:8001/categories/');
-      if (response.ok) {
-        const data = await response.json();
-        setCategories(data);
-      }
-    } catch (err) {
-      console.error('No se pudieron cargar las categorías.');
-    }
-  }, []);
 
   const fetchBooks = useCallback(async () => {
     setLoading(true);
     setError('');
     
     const params = new URLSearchParams();
-    if (activeCategory) {
-      params.append('category', activeCategory);
+    const category = searchParams.get('category');
+
+    if (category) {
+      params.append('category', category);
     }
     if (debouncedSearchTerm) {
       params.append('search', debouncedSearchTerm);
@@ -89,21 +70,11 @@ function LibraryView() {
     } finally {
       setLoading(false);
     }
-  }, [activeCategory, debouncedSearchTerm]);
-
-  // Efecto combinado para cargar datos
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
+  }, [debouncedSearchTerm, searchParams]);
 
   useEffect(() => {
     fetchBooks();
   }, [fetchBooks]);
-
-  const handleCategoryClick = (category) => {
-    setActiveCategory(category);
-    setSearchTerm(''); // Limpiar búsqueda al cambiar de categoría
-  };
 
   const handleDeleteBook = async (bookId) => {
     if (window.confirm('¿Estás seguro de que quieres eliminar este libro?')) {
@@ -111,29 +82,11 @@ function LibraryView() {
         const response = await fetch(`http://localhost:8001/books/${bookId}`, { method: 'DELETE' });
         if (response.ok) {
           setBooks(prevBooks => prevBooks.filter(b => b.id !== bookId));
-          fetchCategories();
         } else {
           alert('No se pudo eliminar el libro.');
         }
       } catch (err) {
         alert('Error de conexión al intentar eliminar el libro.');
-      }
-    }
-  };
-
-  const handleDeleteCategory = async (categoryName) => {
-    if (window.confirm(`¿Estás seguro de que quieres eliminar la categoría "${categoryName}" y TODOS sus libros? Esta acción no se puede deshacer.`)) {
-      try {
-        const response = await fetch(`http://localhost:8001/categories/${encodeURIComponent(categoryName)}`, { method: 'DELETE' });
-        if (response.ok) {
-          setActiveCategory(null);
-          fetchCategories();
-          fetchBooks();
-        } else {
-          alert('No se pudo eliminar la categoría.');
-        }
-      } catch (err) {
-        alert('Error de conexión al intentar eliminar la categoría.');
       }
     }
   };
@@ -150,18 +103,6 @@ function LibraryView() {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-      </div>
-
-      <div className="category-filters">
-        <button onClick={() => handleCategoryClick(null)} className={!activeCategory ? 'active' : ''}>Todas</button>
-        {categories.map((category) => (
-          <div key={category} className="category-chip">
-            <button onClick={() => handleCategoryClick(category)} className={activeCategory === category ? 'active' : ''}>
-              {category}
-            </button>
-            <button onClick={() => handleDeleteCategory(category)} className="delete-chip-btn" title={`Eliminar categoría '${category}'`}>×</button>
-          </div>
-        ))}
       </div>
 
       {error && <p className="error-message">{error}</p>}
