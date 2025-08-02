@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import './LibraryView.css';
 
 // Hook personalizado para debounce
@@ -123,14 +123,20 @@ function LibraryView() {
               <p>{book.author}</p>
               <span>{book.category}</span>
             </div>
-            <a 
-              href={`http://localhost:8001/books/download/${book.id}`} 
-              className="download-button" 
-              target="_blank" 
-              rel="noopener noreferrer"
-            >
-              {book.file_path.toLowerCase().endsWith('.pdf') ? 'Abrir PDF' : 'Descargar EPUB'}
-            </a>
+            {book.file_path.toLowerCase().endsWith('.pdf') ? (
+              <a 
+                href={`http://localhost:8001/books/download/${book.id}`} 
+                className="download-button" 
+                target="_blank" 
+                rel="noopener noreferrer"
+              >
+                Abrir PDF
+              </a>
+            ) : (
+              <Link to={`/leer/${book.id}`} className="download-button">
+                Leer EPUB
+              </Link>
+            )}
           </div>
         ))}
       </div>
