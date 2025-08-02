@@ -1,0 +1,32 @@
+# Entornos virtuales de Python
+.venv/
+venv/
+env/
+
+# Archivos de caché de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Archivos de base de datos
+*.db
+*.sqlite
+*.sqlite3
+
+# Archivos de configuración sensibles
+.env
+
+# Directorios de dependencias
+/backend/node_modules/
+/frontend/node_modules/
+
+# Archivos de log y temporales
+*.log
+/backend/temp_books/
+/backend/books/
+/backend/static/covers/
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
