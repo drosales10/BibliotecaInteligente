@@ -1,0 +1,191 @@
+.library-container {
+  width: 100%;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.library-container h2 {
+  color: #61dafb;
+  border-bottom: 2px solid #61dafb;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+.controls-container {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.search-bar {
+  width: 100%;
+  max-width: 500px;
+  padding: 12px 20px;
+  font-size: 1rem;
+  color: #e6e6e6;
+  background-color: #3a3f4a;
+  border: 1px solid #61dafb;
+  border-radius: 25px;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.search-bar:focus {
+  box-shadow: 0 0 10px rgba(97, 218, 251, 0.5);
+  border-color: #88e1fb;
+}
+
+.category-filters {
+  margin-bottom: 30px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.category-filters > button { /* Estilo para el botón "Todas" */
+  background-color: #3a3f4a;
+  border: 1px solid #61dafb;
+  color: #61dafb;
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: bold;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.category-chip {
+  display: flex;
+  align-items: center;
+  background-color: #3a3f4a;
+  border: 1px solid #61dafb;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.category-chip button {
+  background-color: transparent;
+  border: none;
+  color: #61dafb;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: bold;
+  padding: 8px 0 8px 16px;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.category-chip .delete-chip-btn {
+  padding: 8px 10px 8px 8px;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: #ff6b6b;
+}
+.category-chip .delete-chip-btn:hover {
+  color: #e03131;
+}
+
+.category-filters button:hover, .category-chip button:hover {
+  background-color: #4a505c;
+}
+
+.category-filters > button.active, .category-chip button.active {
+  background-color: #61dafb;
+  color: #282c34;
+}
+
+.book-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 25px;
+}
+
+.book-card {
+  position: relative; /* Para posicionar el botón de eliminar */
+  background-color: #282c34;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s;
+}
+
+.book-card:hover {
+  transform: translateY(-5px);
+}
+
+.delete-book-btn {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  font-size: 20px;
+  line-height: 28px;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 10;
+}
+
+.book-card:hover .delete-book-btn {
+  opacity: 1;
+}
+
+.book-cover {
+  width: 100%;
+  height: 280px;
+  object-fit: cover;
+  background-color: #3a3f4a;
+}
+
+.generic-cover {
+  width: 100%;
+  height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #4a505c, #282c34);
+  color: white;
+  font-size: 5rem;
+  font-weight: bold;
+}
+
+.generic-cover-initial {
+  opacity: 0.5;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+.book-card-info {
+  padding: 15px;
+  text-align: left;
+  flex-grow: 1;
+}
+
+.book-card-info h3 { font-size: 1.1rem; margin: 0 0 5px 0; color: white; }
+.book-card-info p { font-size: 0.9rem; margin: 0 0 10px 0; color: #ccc; }
+.book-card-info span { font-size: 0.8rem; background-color: #61dafb; color: #282c34; padding: 3px 8px; border-radius: 12px; font-weight: bold; }
+
+.download-button {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  background-color: #4CAF50;
+  color: white;
+  text-align: center;
+  text-decoration: none;
+  font-weight: bold;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.download-button:hover { background-color: #45a049; }
+.error-message { color: #ff6b6b; }

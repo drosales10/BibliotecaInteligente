@@ -1,15 +1,24 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, or_
 import models
 import os
 
 def get_book_by_path(db: Session, file_path: str):
     return db.query(models.Book).filter(models.Book.file_path == file_path).first()
 
-def get_books(db: Session, category: str | None = None, skip: int = 0, limit: int = 100):
+def get_books(db: Session, category: str | None = None, search: str | None = None, skip: int = 0, limit: int = 100):
     query = db.query(models.Book)
     if category:
         query = query.filter(models.Book.category == category)
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            or_(
+                models.Book.title.ilike(search_term),
+                models.Book.author.ilike(search_term),
+                models.Book.category.ilike(search_term)
+            )
+        )
     return query.order_by(desc(models.Book.id)).offset(skip).limit(limit).all()
 
 def get_categories(db: Session) -> list[str]:

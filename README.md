@@ -10,6 +10,7 @@ Mi Librería Inteligente es una aplicación web que utiliza la IA multimodal de 
 - **Extracción de Portadas:** Intenta encontrar y guardar la imagen de la portada del libro.
 - **Biblioteca Visual:** Explora todos tus libros en una vista de galería.
 - **Filtros por Categoría:** Filtra tu biblioteca por las categorías asignadas por la IA.
+- **Buscador Integrado:** Busca libros instantáneamente por título, autor o categoría.
 - **Gestión Completa:** Elimina libros individuales o categorías enteras con un solo clic.
 - **Acceso Directo:** Abre los archivos originales de tus libros directamente desde la aplicación.
 

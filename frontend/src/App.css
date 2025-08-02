@@ -1,0 +1,131 @@
+.App {
+  text-align: center;
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.App-header h1 {
+  margin: 0;
+}
+
+.App-nav {
+  margin-top: 15px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.App-nav button {
+  background-color: transparent;
+  border: 2px solid #61dafb;
+  color: #61dafb;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: bold;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.App-nav button:hover {
+  background-color: #61dafb;
+  color: #282c34;
+}
+
+.App-nav button.active {
+  background-color: #61dafb;
+  color: #282c34;
+}
+
+.App-content {
+  background-color: #3a3f4a;
+  min-height: calc(100vh - 120px); /* Ajustar altura */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  color: white;
+}
+
+.upload-view-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.upload-container {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.drop-zone {
+  border: 2px dashed #61dafb;
+  border-radius: 10px;
+  width: 50vw;
+  max-width: 600px;
+  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background-color: #282c34;
+}
+
+.drop-zone p {
+  margin: 0;
+  font-size: 1rem;
+}
+
+#file-input {
+  display: none;
+}
+
+.file-label {
+  background-color: #61dafb;
+  color: #282c34;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  margin-top: 15px;
+  transition: background-color 0.2s;
+}
+
+.file-label:hover {
+  background-color: #52b8d8;
+}
+
+.upload-button {
+  background-color: #4CAF50;
+  color: white;
+  padding: 15px 32px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: bold;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.upload-button:hover {
+  background-color: #45a049;
+}
+
+.message {
+  margin-top: 20px;
+  font-size: 1rem;
+  color: #61dafb;
+  font-weight: bold;
+}
