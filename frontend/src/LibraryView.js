@@ -123,7 +123,14 @@ function LibraryView() {
               <p>{book.author}</p>
               <span>{book.category}</span>
             </div>
-            <a href={`http://localhost:8001/books/download/${book.id}`} className="download-button" target="_blank" rel="noopener noreferrer">Abrir/Descargar</a>
+            <a 
+              href={`http://localhost:8001/books/download/${book.id}`} 
+              className="download-button" 
+              target="_blank" 
+              rel="noopener noreferrer"
+            >
+              {book.file_path.toLowerCase().endsWith('.pdf') ? 'Abrir PDF' : 'Descargar EPUB'}
+            </a>
           </div>
         ))}
       </div>

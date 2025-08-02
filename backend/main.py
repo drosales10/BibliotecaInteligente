@@ -175,6 +175,25 @@ def delete_category_and_books(category_name: str, db: Session = Depends(get_db))
 @app.get("/books/download/{book_id}")
 def download_book(book_id: int, db: Session = Depends(get_db)):
     book = db.query(models.Book).filter(models.Book.id == book_id).first()
-    if not book: raise HTTPException(status_code=404, detail="Libro no encontrado.")
-    if not os.path.exists(book.file_path): raise HTTPException(status_code=404, detail="Archivo no encontrado.")
-    return FileResponse(path=book.file_path, filename=os.path.basename(book.file_path))
+    if not book:
+        raise HTTPException(status_code=404, detail="Libro no encontrado.")
+    if not os.path.exists(book.file_path):
+        raise HTTPException(status_code=404, detail="Archivo no encontrado en el disco.")
+
+    file_ext = os.path.splitext(book.file_path)[1].lower()
+    filename = os.path.basename(book.file_path)
+    
+    if file_ext == ".pdf":
+        return FileResponse(
+            path=book.file_path,
+            filename=filename,
+            media_type='application/pdf',
+            content_disposition_type='inline'
+        )
+    else: # Para EPUB y otros tipos de archivo
+        return FileResponse(
+            path=book.file_path,
+            filename=filename,
+            media_type='application/epub+zip',
+            content_disposition_type='attachment'
+        )
