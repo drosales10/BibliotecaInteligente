@@ -154,13 +154,19 @@ def delete_book(db: Session, book_id: int):
         return None
     
     try:
+        # Guardar la ruta del archivo y su directorio para limpieza posterior
+        file_path = book.file_path
+        file_dir = None
+        
         # Eliminar archivo del libro
-        if book.file_path and os.path.exists(book.file_path):
+        if file_path and os.path.exists(file_path):
             try:
-                os.remove(book.file_path)
-                logger.info(f"Archivo del libro eliminado: {book.file_path}")
+                # Obtener el directorio del archivo antes de eliminarlo
+                file_dir = os.path.dirname(file_path)
+                os.remove(file_path)
+                logger.info(f"Archivo del libro eliminado: {file_path}")
             except OSError as e:
-                logger.warning(f"No se pudo eliminar el archivo del libro {book.file_path}: {e}")
+                logger.warning(f"No se pudo eliminar el archivo del libro {file_path}: {e}")
         
         # Eliminar imagen de portada
         if book.cover_image_url and os.path.exists(book.cover_image_url):
@@ -174,6 +180,16 @@ def delete_book(db: Session, book_id: int):
         db.delete(book)
         db.commit()
         logger.info(f"Libro '{book.title}' eliminado exitosamente de la base de datos")
+        
+        # Limpiar directorio vacío si es un directorio de extracción de ZIP
+        if file_dir and "books" in file_dir and os.path.exists(file_dir):
+            try:
+                # Verificar si el directorio está vacío
+                if not os.listdir(file_dir):
+                    os.rmdir(file_dir)
+                    logger.info(f"Directorio vacío eliminado: {file_dir}")
+            except OSError as e:
+                logger.warning(f"No se pudo eliminar el directorio {file_dir}: {e}")
         
         return book
         
@@ -192,15 +208,25 @@ def delete_books_by_category(db: Session, category: str):
         return 0
     
     deleted_count = 0
+    directories_to_check = set()  # Para rastrear directorios que podrían quedar vacíos
+    
     try:
         for book in books_to_delete:
+            # Guardar la ruta del archivo y su directorio para limpieza posterior
+            file_path = book.file_path
+            file_dir = None
+            
             # Eliminar archivo del libro
-            if book.file_path and os.path.exists(book.file_path):
+            if file_path and os.path.exists(file_path):
                 try:
-                    os.remove(book.file_path)
-                    logger.info(f"Archivo del libro eliminado: {book.file_path}")
+                    # Obtener el directorio del archivo antes de eliminarlo
+                    file_dir = os.path.dirname(file_path)
+                    if file_dir and "books" in file_dir:
+                        directories_to_check.add(file_dir)
+                    os.remove(file_path)
+                    logger.info(f"Archivo del libro eliminado: {file_path}")
                 except OSError as e:
-                    logger.warning(f"No se pudo eliminar el archivo del libro {book.file_path}: {e}")
+                    logger.warning(f"No se pudo eliminar el archivo del libro {file_path}: {e}")
             
             # Eliminar imagen de portada
             if book.cover_image_url and os.path.exists(book.cover_image_url):
@@ -215,6 +241,18 @@ def delete_books_by_category(db: Session, category: str):
         
         db.commit()
         logger.info(f"Categoría '{category}' eliminada con {deleted_count} libros")
+        
+        # Limpiar directorios vacíos después de eliminar todos los libros
+        for directory in directories_to_check:
+            if os.path.exists(directory):
+                try:
+                    # Verificar si el directorio está vacío
+                    if not os.listdir(directory):
+                        os.rmdir(directory)
+                        logger.info(f"Directorio vacío eliminado: {directory}")
+                except OSError as e:
+                    logger.warning(f"No se pudo eliminar el directorio {directory}: {e}")
+        
         return deleted_count
         
     except Exception as e:
