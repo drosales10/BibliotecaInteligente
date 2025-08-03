@@ -14,6 +14,13 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 import json
 from typing import List
+import asyncio
+import aiofiles
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import tempfile
+import zipfile
+from pathlib import Path
+import time
 
 import crud, models, database, schemas
 
@@ -231,8 +238,27 @@ def download_book(book_id: int, db: Session = Depends(get_db)):
     book = db.query(models.Book).filter(models.Book.id == book_id).first()
     if not book:
         raise HTTPException(status_code=404, detail="Libro no encontrado.")
+    
+    # Verificar si el archivo existe
     if not os.path.exists(book.file_path):
-        raise HTTPException(status_code=404, detail="Archivo no encontrado en el disco.")
+        # Si el archivo no existe, podría ser un libro extraído de un ZIP
+        # Intentar buscar el archivo en el directorio de libros
+        books_dir = "books"
+        filename = os.path.basename(book.file_path)
+        
+        # Buscar archivos que coincidan con el nombre (ignorando el timestamp)
+        if os.path.exists(books_dir):
+            for file in os.listdir(books_dir):
+                if file.endswith(filename) or filename in file:
+                    book.file_path = os.path.abspath(os.path.join(books_dir, file))
+                    break
+        
+        # Si aún no se encuentra, reportar error
+        if not os.path.exists(book.file_path):
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Archivo no encontrado en el disco. Ruta: {book.file_path}"
+            )
 
     file_ext = os.path.splitext(book.file_path)[1].lower()
     filename = os.path.basename(book.file_path)
@@ -273,7 +299,7 @@ async def convert_epub_to_pdf(file: UploadFile = File(...)):
                 zip_ref.extractall(temp_dir)
 
             # 2. Encontrar el archivo .opf (el "manifiesto" del libro)
-            opf_path = next(pathlib.Path(temp_dir).rglob('*.opf'), None)
+            opf_path = next(Path(temp_dir).rglob('*.opf'), None)
             if not opf_path:
                 raise Exception("No se pudo encontrar el archivo .opf en el EPUB.")
             content_root = opf_path.parent
@@ -340,3 +366,436 @@ async def convert_epub_to_pdf(file: UploadFile = File(...)):
         error_message = f"Error durante la conversión: {type(e).__name__}: {e}"
         print(error_message)
         raise HTTPException(status_code=500, detail=error_message)
+
+# --- Funciones de Carga Masiva ---
+
+def is_valid_book_file(file_path: str) -> bool:
+    """Verifica si un archivo es un libro válido (PDF o EPUB) o un ZIP que contenga libros"""
+    valid_extensions = {'.pdf', '.epub', '.zip'}
+    return Path(file_path).suffix.lower() in valid_extensions
+
+def find_book_files(directory: str) -> List[str]:
+    """Encuentra recursivamente todos los archivos de libros en un directorio, incluyendo ZIPs"""
+    book_files = []
+    directory_path = Path(directory)
+    
+    if not directory_path.exists():
+        return book_files
+    
+    for file_path in directory_path.rglob('*'):
+        if file_path.is_file() and is_valid_book_file(str(file_path)):
+            book_files.append(str(file_path))
+    
+    return book_files
+
+def extract_books_from_zip(zip_path: str, temp_dir: str) -> List[str]:
+    """Extrae libros de un archivo ZIP y retorna las rutas de los libros encontrados"""
+    extracted_books = []
+    
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            # Extraer el ZIP a un subdirectorio temporal
+            zip_name = Path(zip_path).stem
+            extract_dir = os.path.join(temp_dir, f"extracted_{zip_name}")
+            os.makedirs(extract_dir, exist_ok=True)
+            
+            zip_ref.extractall(extract_dir)
+            
+            # Buscar archivos PDF y EPUB en el contenido extraído
+            for extracted_file in Path(extract_dir).rglob('*'):
+                if extracted_file.is_file() and extracted_file.suffix.lower() in {'.pdf', '.epub'}:
+                    extracted_books.append(str(extracted_file))
+                    
+    except Exception as e:
+        print(f"Error al extraer ZIP {zip_path}: {e}")
+    
+    return extracted_books
+
+def process_zip_containing_books(zip_path: str, temp_dir: str) -> List[str]:
+    """Procesa un ZIP que puede contener libros y retorna las rutas de los libros encontrados"""
+    books_found = []
+    
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            # Verificar si el ZIP contiene archivos PDF o EPUB
+            zip_contents = zip_ref.namelist()
+            has_books = any(name.lower().endswith(('.pdf', '.epub')) for name in zip_contents)
+            
+            if has_books:
+                # Extraer y procesar los libros del ZIP
+                extracted_books = extract_books_from_zip(zip_path, temp_dir)
+                books_found.extend(extracted_books)
+                
+    except Exception as e:
+        print(f"Error al procesar ZIP {zip_path}: {e}")
+    
+    return books_found
+
+async def process_single_book_async(file_path: str, static_dir: str, db: Session) -> dict:
+    """Procesa un libro individual de forma asíncrona con verificación de duplicados"""
+    try:
+        file_extension = Path(file_path).suffix.lower()
+        
+        # Verificar si el archivo proviene de un ZIP temporal (extraído)
+        is_from_temp_zip = "extracted_" in file_path or "temp" in file_path
+        
+        # Si el archivo proviene de un ZIP temporal, copiarlo a un directorio permanente
+        if is_from_temp_zip:
+            books_dir = "books"
+            os.makedirs(books_dir, exist_ok=True)
+            
+            # Generar un nombre único para el archivo
+            original_filename = Path(file_path).name
+            unique_filename = f"{int(time.time())}_{original_filename}"
+            permanent_path = os.path.abspath(os.path.join(books_dir, unique_filename))
+            
+            # Copiar el archivo al directorio permanente
+            shutil.copy2(file_path, permanent_path)
+            file_path = permanent_path
+        
+        # Procesar el archivo según su tipo
+        if file_extension == '.pdf':
+            result = process_pdf(file_path, static_dir)
+        elif file_extension == '.epub':
+            result = process_epub(file_path, static_dir)
+        else:
+            return {"success": False, "file": file_path, "error": "Tipo de archivo no soportado"}
+        
+        # Analizar con IA
+        analysis = analyze_with_gemini(result["text"])
+        
+        # Verificar duplicados antes de guardar
+        duplicate_check = crud.is_duplicate_book(
+            db=db,
+            title=analysis["title"],
+            author=analysis["author"],
+            file_path=file_path
+        )
+        
+        if duplicate_check["is_duplicate"]:
+            return {
+                "success": False,
+                "file": file_path,
+                "error": "Duplicado detectado",
+                "duplicate_info": {
+                    "is_duplicate": True,
+                    "reason": duplicate_check["reason"],
+                    "existing_book": {
+                        "id": duplicate_check["existing_book"].id,
+                        "title": duplicate_check["existing_book"].title,
+                        "author": duplicate_check["existing_book"].author,
+                        "category": duplicate_check["existing_book"].category
+                    } if duplicate_check["existing_book"] else None,
+                    "message": duplicate_check["message"]
+                }
+            }
+        
+        # Guardar en base de datos usando la función con verificación de duplicados
+        book_result = crud.create_book_with_duplicate_check(
+            db=db,
+            title=analysis["title"],
+            author=analysis["author"],
+            category=analysis["category"],
+            cover_image_url=result.get("cover_image_url"),
+            file_path=file_path
+        )
+        
+        if book_result["success"]:
+            return {
+                "success": True,
+                "file": file_path,
+                "book": {
+                    "id": book_result["book"].id,
+                    "title": book_result["book"].title,
+                    "author": book_result["book"].author,
+                    "category": book_result["book"].category
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "file": file_path,
+                "error": "Error al guardar en base de datos",
+                "duplicate_info": book_result["duplicate_info"]
+            }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "file": file_path,
+            "error": str(e)
+        }
+
+@app.post("/upload-bulk/", response_model=schemas.BulkUploadResponse)
+async def upload_bulk_books(
+    folder_zip: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Carga masiva de libros desde un archivo ZIP que contiene una carpeta con libros
+    """
+    if not folder_zip.filename.lower().endswith('.zip'):
+        raise HTTPException(status_code=400, detail="El archivo debe ser un ZIP.")
+    
+    try:
+        # Crear directorio temporal para extraer el ZIP
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Leer y extraer el ZIP
+            zip_content = await folder_zip.read()
+            
+            with zipfile.ZipFile(io.BytesIO(zip_content), 'r') as zip_ref:
+                zip_ref.extractall(temp_dir)
+            
+            # Encontrar todos los archivos de libros y ZIPs que contengan libros
+            all_files = find_book_files(temp_dir)
+            
+            # Separar archivos directos de libros y ZIPs
+            direct_books = [f for f in all_files if Path(f).suffix.lower() in {'.pdf', '.epub'}]
+            zip_files = [f for f in all_files if Path(f).suffix.lower() == '.zip']
+            
+            # Procesar ZIPs que contengan libros
+            books_from_zips = []
+            for zip_file in zip_files:
+                extracted_books = process_zip_containing_books(zip_file, temp_dir)
+                books_from_zips.extend(extracted_books)
+            
+            # Combinar todos los libros encontrados
+            book_files = direct_books + books_from_zips
+            
+            if not book_files:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="No se encontraron archivos PDF o EPUB válidos en el ZIP principal ni en los ZIPs contenidos."
+                )
+            
+            # Configurar el procesamiento concurrente
+            max_workers = min(4, len(book_files))  # Máximo 4 workers concurrentes
+            results = []
+            
+            # Procesar libros en paralelo usando ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Crear tareas para cada libro
+                future_to_file = {
+                    executor.submit(process_single_book_async, file_path, STATIC_COVERS_DIR, db): file_path
+                    for file_path in book_files
+                }
+                
+                # Recolectar resultados
+                for future in as_completed(future_to_file):
+                    result = future.result()
+                    results.append(result)
+            
+            # Resumen de resultados
+            successful = [r for r in results if r["success"]]
+            failed = [r for r in results if not r["success"] and r.get("error") != "Duplicado detectado"]
+            duplicates = [r for r in results if not r["success"] and r.get("error") == "Duplicado detectado"]
+            
+            return {
+                "message": f"Procesamiento completado. {len(successful)} libros procesados exitosamente, {len(failed)} fallaron, {len(duplicates)} duplicados detectados.",
+                "total_files": len(book_files),
+                "successful": len(successful),
+                "failed": len(failed),
+                "duplicates": len(duplicates),
+                "successful_books": successful,
+                "failed_files": failed,
+                "duplicate_files": duplicates
+            }
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error durante la carga masiva: {str(e)}")
+
+@app.post("/upload-folder/", response_model=schemas.BulkUploadResponse)
+async def upload_folder_books(
+    folder_path: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Carga masiva de libros desde una ruta de carpeta local
+    """
+    try:
+        # Verificar que la carpeta existe
+        if not Path(folder_path).exists():
+            raise HTTPException(status_code=400, detail="La carpeta especificada no existe.")
+        
+        # Encontrar todos los archivos de libros y ZIPs que contengan libros
+        all_files = find_book_files(folder_path)
+        
+        # Separar archivos directos de libros y ZIPs
+        direct_books = [f for f in all_files if Path(f).suffix.lower() in {'.pdf', '.epub'}]
+        zip_files = [f for f in all_files if Path(f).suffix.lower() == '.zip']
+        
+        # Procesar ZIPs que contengan libros
+        books_from_zips = []
+        for zip_file in zip_files:
+            extracted_books = process_zip_containing_books(zip_file, folder_path)
+            books_from_zips.extend(extracted_books)
+        
+        # Combinar todos los libros encontrados
+        book_files = direct_books + books_from_zips
+        
+        if not book_files:
+            raise HTTPException(
+                status_code=400, 
+                detail="No se encontraron archivos PDF o EPUB válidos en la carpeta ni en los ZIPs contenidos."
+            )
+        
+        # Configurar el procesamiento concurrente
+        max_workers = min(4, len(book_files))  # Máximo 4 workers concurrentes
+        results = []
+        
+        # Procesar libros en paralelo usando ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Crear tareas para cada libro
+            future_to_file = {
+                executor.submit(process_single_book_async, file_path, STATIC_COVERS_DIR, db): file_path
+                for file_path in book_files
+            }
+            
+            # Recolectar resultados
+            for future in as_completed(future_to_file):
+                result = future.result()
+                results.append(result)
+        
+        # Resumen de resultados
+        successful = [r for r in results if r["success"]]
+        failed = [r for r in results if not r["success"] and r.get("error") != "Duplicado detectado"]
+        duplicates = [r for r in results if not r["success"] and r.get("error") == "Duplicado detectado"]
+        
+        return {
+            "message": f"Procesamiento completado. {len(successful)} libros procesados exitosamente, {len(failed)} fallaron, {len(duplicates)} duplicados detectados.",
+            "total_files": len(book_files),
+            "successful": len(successful),
+            "failed": len(failed),
+            "duplicates": len(duplicates),
+            "successful_books": successful,
+            "failed_files": failed,
+            "duplicate_files": duplicates
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error durante la carga masiva: {str(e)}")
+
+def cleanup_orphaned_files():
+    """Limpia archivos en el directorio de libros que no están referenciados en la base de datos"""
+    try:
+        books_dir = "books"
+        if not os.path.exists(books_dir):
+            return
+        
+        # Obtener todos los archivos en el directorio de libros
+        files_in_dir = set()
+        for file in os.listdir(books_dir):
+            file_path = os.path.abspath(os.path.join(books_dir, file))
+            if os.path.isfile(file_path):
+                files_in_dir.add(file_path)
+        
+        # Obtener todos los archivos referenciados en la base de datos
+        db = database.SessionLocal()
+        try:
+            books = db.query(models.Book).all()
+            referenced_files = {book.file_path for book in books}
+            
+            # Encontrar archivos huérfanos
+            orphaned_files = files_in_dir - referenced_files
+            
+            # Eliminar archivos huérfanos
+            for orphaned_file in orphaned_files:
+                try:
+                    os.remove(orphaned_file)
+                    print(f"Archivo huérfano eliminado: {orphaned_file}")
+                except Exception as e:
+                    print(f"Error al eliminar archivo huérfano {orphaned_file}: {e}")
+                    
+        finally:
+            db.close()
+            
+    except Exception as e:
+        print(f"Error durante la limpieza de archivos huérfanos: {e}")
+
+def validate_book_file(file_path: str) -> bool:
+    """Valida que un archivo de libro sea accesible y válido"""
+    try:
+        if not os.path.exists(file_path):
+            return False
+        
+        # Verificar que el archivo sea legible
+        with open(file_path, 'rb') as f:
+            f.read(1024)  # Leer los primeros 1KB para verificar acceso
+        
+        return True
+    except Exception:
+        return False
+
+@app.get("/books/health-check")
+def check_books_health(db: Session = Depends(get_db)):
+    """
+    Verifica el estado de salud de los archivos de libros en la base de datos
+    """
+    try:
+        books = db.query(models.Book).all()
+        health_report = {
+            "total_books": len(books),
+            "accessible_files": 0,
+            "missing_files": 0,
+            "orphaned_files": 0,
+            "details": []
+        }
+        
+        # Verificar archivos referenciados en la base de datos
+        referenced_files = set()
+        for book in books:
+            file_status = validate_book_file(book.file_path)
+            referenced_files.add(book.file_path)
+            
+            if file_status:
+                health_report["accessible_files"] += 1
+                health_report["details"].append({
+                    "book_id": book.id,
+                    "title": book.title,
+                    "file_path": book.file_path,
+                    "status": "accessible"
+                })
+            else:
+                health_report["missing_files"] += 1
+                health_report["details"].append({
+                    "book_id": book.id,
+                    "title": book.title,
+                    "file_path": book.file_path,
+                    "status": "missing"
+                })
+        
+        # Verificar archivos huérfanos en el directorio de libros
+        books_dir = "books"
+        if os.path.exists(books_dir):
+            files_in_dir = set()
+            for file in os.listdir(books_dir):
+                file_path = os.path.abspath(os.path.join(books_dir, file))
+                if os.path.isfile(file_path):
+                    files_in_dir.add(file_path)
+            
+            orphaned_files = files_in_dir - referenced_files
+            health_report["orphaned_files"] = len(orphaned_files)
+            
+            for orphaned_file in orphaned_files:
+                health_report["details"].append({
+                    "book_id": None,
+                    "title": None,
+                    "file_path": orphaned_file,
+                    "status": "orphaned"
+                })
+        
+        return health_report
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error durante la verificación de salud: {str(e)}")
+
+@app.post("/books/cleanup")
+def cleanup_books(db: Session = Depends(get_db)):
+    """
+    Ejecuta la limpieza de archivos huérfanos
+    """
+    try:
+        cleanup_orphaned_files()
+        return {"message": "Limpieza de archivos huérfanos completada"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error durante la limpieza: {str(e)}")
