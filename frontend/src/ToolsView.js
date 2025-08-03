@@ -56,8 +56,7 @@ function EpubToPdfConverter() {
         const a = document.createElement('a');
         a.style.display = 'none';
         a.href = downloadUrl;
-        // El nombre del archivo ya está en la URL, pero podemos sugerir uno
-        a.download = selectedFile.name.replace(/\.epub$/i, '.pdf');
+        a.target = '_blank'; // Abre en una nueva pestaña
         document.body.appendChild(a);
         a.click();
         

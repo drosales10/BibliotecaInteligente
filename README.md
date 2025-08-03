@@ -2,13 +2,14 @@
 
 Mi Librería Inteligente es una aplicación web que utiliza la IA multimodal de Google Gemini para analizar y catalogar automáticamente tu colección de libros digitales (PDF y EPUB). Simplemente sube un libro, y la aplicación extraerá su portada, título, autor y le asignará una categoría, guardándolo todo en una base de datos local para que puedas explorar tu biblioteca fácilmente.
 
-## ✨ Características
+## ✨ Características Principales
 
-- **Subida Sencilla:** Arrastra y suelta o selecciona archivos PDF y EPUB.
-- **Análisis con IA:** Utiliza Google Gemini para extraer metadatos clave de tus libros, incluso si no están presentes en el archivo.
-- **Catalogación Automática:** Guarda los libros en una base de datos local.
-- **Extracción de Portadas:** Intenta encontrar y guardar la imagen de la portada del libro.
-- **Biblioteca Visual:** Explora todos tus libros en una vista de galería.
+- **Subida Sencilla:** Arrastra y suelta o selecciona archivos PDF y EPUB para añadir a tu biblioteca.
+- **Análisis Inteligente con IA:** Utiliza Google Gemini para extraer metadatos clave (título, autor, categoría) de tus libros, incluso si no están presentes en el archivo, y encuentra la portada.
+- **Lectura Integrada:** Lee tus libros (PDF y EPUB) directamente dentro de la aplicación, sin necesidad de software externo. Los PDF se abren en una nueva pestaña para una mejor experiencia.
+- **Conversor EPUB a PDF:** Convierte tus archivos EPUB a formato PDF directamente desde la aplicación. El PDF resultante se abre automáticamente en una nueva pestaña.
+- **Catalogación Automática:** Guarda los libros y sus metadatos en una base de datos local.
+- **Biblioteca Visual:** Explora todos tus libros en una vista de galería intuitiva.
 - **Filtros por Categoría:** Filtra tu biblioteca por las categorías asignadas por la IA.
 - **Buscador Integrado:** Busca libros instantáneamente por título, autor o categoría.
 - **Gestión Completa:** Elimina libros individuales o categorías enteras con un solo clic.
@@ -34,7 +35,7 @@ Sigue estos pasos para ejecutar el proyecto en tu máquina local.
 
 ### Dependencias Adicionales (Para la Conversión EPUB a PDF)
 
-La herramienta de conversión de EPUB a PDF requiere la instalación de **GTK3**. Si no instalas esta dependencia, el resto de la aplicación funcionará correctamente, pero la herramienta de conversión mostrará un error.
+La herramienta de conversión de EPUB a PDF requiere la instalación de **GTK3**. Si no instalas esta dependencia, el resto de la aplicación funcionará correctamente, pero la herramienta de conversión mostrará un error al intentar convertir.
 
 Sigue las instrucciones para tu sistema operativo:
 
