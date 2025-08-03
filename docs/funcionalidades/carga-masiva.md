@@ -303,4 +303,38 @@ test_books.zip
 - **ZIP anidado**: Contiene otros ZIPs con libros
 - **ZIP mixto**: Combina archivos directos y ZIPs anidados
 - **ZIP con duplicados**: Para probar detección de duplicados
-- **ZIP corrupto**: Para probar manejo de errores 
+- **ZIP corrupto**: Para probar manejo de errores
+
+## Manejo de Errores de IA
+
+### Problemas Comunes con la API de Gemini
+1. **Rate Limiting**: Demasiadas llamadas simultáneas a la API
+2. **Quota Exceeded**: Se ha agotado la cuota de la API
+3. **Timeout**: La API no responde en el tiempo esperado
+4. **Network Errors**: Problemas de conectividad
+
+### Soluciones Implementadas
+- **Semáforo de concurrencia**: Máximo 2 llamadas simultáneas a la IA
+- **Retry logic**: Hasta 3 intentos con esperas progresivas
+- **Reducción de workers**: De 4 a 2 workers concurrentes
+- **Delays entre llamadas**: 0.5 segundos entre procesamientos
+- **Manejo específico de errores**: Diferentes estrategias según el tipo de error
+
+### Configuración de Workers
+- **Workers concurrentes**: 2 (reducido de 4)
+- **Semáforo de IA**: Máximo 2 llamadas simultáneas
+- **Delay entre llamadas**: 0.5 segundos
+- **Retry attempts**: 3 intentos por libro
+- **Espera progresiva**: 1s, 2s, 3s para rate limits
+
+### Monitoreo de Estado de IA
+El endpoint `/ai/status` permite verificar:
+- **Estado de la API**: Si está respondiendo correctamente
+- **Test de conectividad**: Llamada de prueba a la IA
+- **Información de errores**: Detalles sobre problemas específicos
+
+### Recomendaciones para Cargas Masivas
+- **Lotes pequeños**: Procesar máximo 20-30 libros por lote
+- **Pausas entre lotes**: Esperar 1-2 minutos entre cargas grandes
+- **Monitoreo**: Usar `/ai/status` antes de cargas masivas
+- **Verificación**: Revisar logs del backend para errores específicos 

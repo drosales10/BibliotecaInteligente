@@ -21,6 +21,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 import time
+import threading
 
 import crud, models, database, schemas
 
@@ -31,9 +32,17 @@ if not API_KEY: raise Exception("No se encontró la GEMINI_API_KEY.")
 genai.configure(api_key=API_KEY)
 models.Base.metadata.create_all(bind=database.engine)
 
+# Semáforo para limitar llamadas concurrentes a la API de IA
+ai_semaphore = threading.Semaphore(2)  # Máximo 2 llamadas concurrentes a la IA
+
 # --- Funciones de IA y Procesamiento ---
-def analyze_with_gemini(text: str) -> dict:
-    model = genai.GenerativeModel('gemini-2.0-flash')
+def analyze_with_gemini(text: str, max_retries: int = 3) -> dict:
+    """
+    Analiza texto con Gemini AI con manejo robusto de errores y retry logic
+    """
+    # Usar semáforo para limitar llamadas concurrentes
+    with ai_semaphore:
+        model = genai.GenerativeModel('gemini-2.0-flash')
     prompt = f"""
     Eres un bibliotecario experto. Analiza el siguiente texto extraído de las primeras páginas de un libro.
     Tu tarea es identificar el título, el autor y la categoría principal del libro.
@@ -42,17 +51,80 @@ def analyze_with_gemini(text: str) -> dict:
     Ejemplo: {{'title': 'El nombre del viento', 'author': 'Patrick Rothfuss', 'category': 'Fantasía'}}
     Texto a analizar: --- {text[:4000]} ---
     """
-    try:
-        response = model.generate_content(prompt)
-        match = response.text.strip()
-        if match.startswith("```json"):
-            match = match[7:]
-        if match.endswith("```"):
-            match = match[:-3]
-        return json.loads(match.strip())
-    except Exception as e:
-        print(f"Error al analizar con Gemini: {e}")
-        return {"title": "Error de IA", "author": "Error de IA", "category": "Error de IA"}
+    
+    for attempt in range(max_retries):
+        try:
+            # Configurar timeout y parámetros de seguridad
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.1,  # Menor temperatura para respuestas más consistentes
+                    max_output_tokens=500,  # Limitar tokens de salida
+                    top_p=0.8,
+                    top_k=40
+                ),
+                safety_settings=[
+                    {
+                        "category": "HARM_CATEGORY_HARASSMENT",
+                        "threshold": "BLOCK_NONE"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_HATE_SPEECH", 
+                        "threshold": "BLOCK_NONE"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                        "threshold": "BLOCK_NONE"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                        "threshold": "BLOCK_NONE"
+                    }
+                ]
+            )
+            
+            match = response.text.strip()
+            if match.startswith("```json"):
+                match = match[7:]
+            if match.endswith("```"):
+                match = match[:-3]
+            
+            result = json.loads(match.strip())
+            
+            # Validar que el resultado tenga las claves esperadas
+            if not all(key in result for key in ["title", "author", "category"]):
+                raise ValueError("Respuesta de IA incompleta")
+            
+            return result
+            
+        except json.JSONDecodeError as e:
+            print(f"Error de JSON en intento {attempt + 1}: {e}")
+            if attempt == max_retries - 1:
+                return {"title": "Error de formato", "author": "Error de formato", "category": "Error de formato"}
+            time.sleep(1)  # Esperar antes del retry
+            
+        except Exception as e:
+            error_msg = str(e).lower()
+            print(f"Error de IA en intento {attempt + 1}: {e}")
+            print(f"Tipo de error: {type(e).__name__}")
+            
+            # Si es un error de rate limiting o quota, esperar más tiempo
+            if any(keyword in error_msg for keyword in ["quota", "rate", "limit", "too many", "429", "resource exhausted"]):
+                wait_time = (attempt + 1) * 3  # Espera progresiva: 3s, 6s, 9s
+                print(f"Rate limit detectado, esperando {wait_time} segundos...")
+                time.sleep(wait_time)
+            elif "timeout" in error_msg or "deadline" in error_msg:
+                wait_time = (attempt + 1) * 2
+                print(f"Timeout detectado, esperando {wait_time} segundos...")
+                time.sleep(wait_time)
+            else:
+                time.sleep(1)  # Espera corta para otros errores
+            
+            if attempt == max_retries - 1:
+                print(f"Error final después de {max_retries} intentos: {e}")
+                return {"title": "Error de IA", "author": "Error de IA", "category": "Error de IA"}
+    
+    return {"title": "Error de IA", "author": "Error de IA", "category": "Error de IA"}
 
 def process_pdf(file_path: str, static_dir: str) -> dict:
     doc = fitz.open(file_path)
@@ -597,7 +669,8 @@ async def upload_bulk_books(
             # Procesar solo archivos únicos concurrentemente
             results = []
             if unique_files:
-                max_workers = min(4, len(unique_files))  # Máximo 4 workers concurrentes
+                # Reducir workers para evitar rate limiting de la API de IA
+                max_workers = min(2, len(unique_files))  # Máximo 2 workers concurrentes
                 
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     # Crear tareas para cada libro único
@@ -606,10 +679,13 @@ async def upload_bulk_books(
                         for file_path in unique_files
                     }
                     
-                    # Recolectar resultados
+                    # Recolectar resultados con delay entre procesamientos
                     for future in as_completed(future_to_file):
                         result = future.result()
                         results.append(result)
+                        
+                        # Pequeño delay entre procesamientos para evitar rate limiting
+                        time.sleep(0.5)
             
             # Agregar resultados de duplicados detectados en verificación previa
             for duplicate in duplicate_files:
@@ -934,3 +1010,31 @@ def cleanup_books(db: Session = Depends(get_db)):
         return {"message": "Limpieza de archivos huérfanos completada"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error durante la limpieza: {str(e)}")
+
+@app.get("/ai/status")
+def check_ai_status():
+    """
+    Verifica el estado de la API de IA
+    """
+    try:
+        # Hacer una llamada de prueba simple a la IA
+        test_result = analyze_with_gemini("Este es un texto de prueba para verificar la API de IA.")
+        
+        if "Error de IA" in test_result["title"]:
+            return {
+                "status": "error",
+                "message": "La API de IA no está respondiendo correctamente",
+                "test_result": test_result
+            }
+        else:
+            return {
+                "status": "ok",
+                "message": "La API de IA está funcionando correctamente",
+                "test_result": test_result
+            }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error al verificar la API de IA: {str(e)}",
+            "error_type": type(e).__name__
+        }

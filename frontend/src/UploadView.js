@@ -320,7 +320,7 @@ function UploadView() {
             </div>
           </div>
         </div>
-      ) : (
+      ) : uploadMode === 'bulk' ? (
         <div className="bulk-upload-section">
           <p>
             Sube un archivo ZIP que contenga una carpeta con libros (PDF y EPUB). 
@@ -345,19 +345,19 @@ function UploadView() {
             </div>
           </div>
           
-                     <div className="bulk-info">
-             <h4>📋 Instrucciones para carga masiva:</h4>
-             <ul>
-               <li>Comprime una carpeta que contenga libros PDF y EPUB</li>
-               <li>La aplicación buscará recursivamente en todos los subdirectorios</li>
-               <li>Se procesarán hasta 4 libros simultáneamente</li>
-               <li>Cada libro será analizado con IA para extraer metadatos</li>
-               <li>Se detectarán automáticamente duplicados por nombre de archivo, título y autor</li>
-               <li>Los duplicados no se agregarán a la biblioteca</li>
-               <li>Se procesarán automáticamente archivos ZIP que contengan libros</li>
-               <li>Soporte para ZIPs anidados (ZIPs dentro de ZIPs)</li>
-             </ul>
-           </div>
+          <div className="bulk-info">
+            <h4>📋 Instrucciones para carga masiva:</h4>
+            <ul>
+              <li>Comprime una carpeta que contenga libros PDF y EPUB</li>
+              <li>La aplicación buscará recursivamente en todos los subdirectorios</li>
+              <li>Se procesarán hasta 4 libros simultáneamente</li>
+              <li>Cada libro será analizado con IA para extraer metadatos</li>
+              <li>Se detectarán automáticamente duplicados por nombre de archivo, título y autor</li>
+              <li>Los duplicados no se agregarán a la biblioteca</li>
+              <li>Se procesarán automáticamente archivos ZIP que contengan libros</li>
+              <li>Soporte para ZIPs anidados (ZIPs dentro de ZIPs)</li>
+            </ul>
+          </div>
         </div>
       ) : (
         <div className="folder-upload-section">
