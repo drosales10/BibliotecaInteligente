@@ -12,3 +12,6 @@ class Book(BookBase):
 
     class Config:
         from_attributes = True
+
+class ConversionResponse(BaseModel):
+    download_url: str

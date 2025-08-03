@@ -32,6 +32,38 @@ Sigue estos pasos para ejecutar el proyecto en tu máquina local.
 - [Node.js y npm](https://nodejs.org/en/)
 - Una clave de API de **Google Gemini**. Puedes obtenerla en [Google AI Studio](https://aistudio.google.com/app/apikey).
 
+### Dependencias Adicionales (Para la Conversión EPUB a PDF)
+
+La herramienta de conversión de EPUB a PDF requiere la instalación de **GTK3**. Si no instalas esta dependencia, el resto de la aplicación funcionará correctamente, pero la herramienta de conversión mostrará un error.
+
+Sigue las instrucciones para tu sistema operativo:
+
+- **Windows:**
+  1. Descarga e instala **MSYS2** desde [su web oficial](https://www.msys2.org/).
+  2. Abre la terminal de MSYS2 (no la de Windows) y actualiza el sistema:
+     ```bash
+     pacman -Syu
+     ```
+  3. Cierra la terminal y vuelve a abrirla. Actualiza de nuevo:
+     ```bash
+     pacman -Su
+     ```
+  4. Instala GTK3:
+     ```bash
+     pacman -S mingw-w64-x86_64-gtk3
+     ```
+  5. Añade la carpeta `bin` de MSYS2 a tu **PATH** de Windows. Normalmente se encuentra en `C:\msys64\mingw64\bin`.
+
+- **macOS (usando [Homebrew](https://brew.sh/)):**
+  ```bash
+  brew install pango
+  ```
+
+- **Linux (Debian/Ubuntu):**
+  ```bash
+  sudo apt-get install libpango-1.0-0 libharfbuzz0b libpangoft2-1.0-0
+  ```
+
 ### 1. Clonar el Repositorio
 
 ```bash

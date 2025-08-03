@@ -4,6 +4,7 @@ import Header from './Header';
 import LibraryView from './LibraryView';
 import UploadView from './UploadView';
 import CategoriesView from './CategoriesView';
+import ToolsView from './ToolsView';
 import ReaderView from './ReaderView';
 import './App.css';
 
@@ -17,6 +18,7 @@ function App() {
             <Route path="/" element={<LibraryView />} />
             <Route path="/upload" element={<UploadView />} />
             <Route path="/etiquetas" element={<CategoriesView />} />
+            <Route path="/herramientas" element={<ToolsView />} />
             <Route path="/leer/:bookId" element={<ReaderView />} />
           </Routes>
         </main>

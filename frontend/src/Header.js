@@ -18,6 +18,9 @@ function Header() {
         <NavLink to="/etiquetas" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
           Etiquetas
         </NavLink>
+        <NavLink to="/herramientas" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+          Herramientas
+        </NavLink>
       </nav>
     </header>
   );

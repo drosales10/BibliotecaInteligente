@@ -1,0 +1,86 @@
+.tools-container {
+  padding: 20px;
+}
+
+.tools-container h2 {
+  color: #61dafb;
+  border-bottom: 2px solid #61dafb;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+.tools-grid {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.tool-card {
+  width: 100%;
+  max-width: 600px;
+  padding: 30px;
+  background-color: #282c34;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  text-align: center;
+}
+
+.tool-card h3 {
+  margin-top: 0;
+  color: #61dafb;
+}
+
+/* Reutilizamos los estilos de UploadView para la consistencia */
+.upload-container {
+  margin-top: 20px;
+}
+
+.drop-zone {
+  border: 2px dashed #61dafb;
+  border-radius: 8px;
+  padding: 40px;
+  margin-bottom: 20px;
+  color: #ccc;
+}
+
+#file-input-converter {
+  display: none;
+}
+
+.file-label {
+  background-color: #61dafb;
+  color: #20232a;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  display: inline-block;
+  margin-top: 10px;
+}
+
+.upload-button {
+  background-color: #4CAF50;
+  color: white;
+  padding: 12px 25px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: bold;
+  transition: background-color 0.2s;
+}
+
+.upload-button:disabled {
+  background-color: #555;
+  cursor: not-allowed;
+}
+
+.upload-button:hover:not(:disabled) {
+  background-color: #45a049;
+}
+
+.message {
+  margin-top: 20px;
+  color: #61dafb;
+  font-weight: bold;
+}

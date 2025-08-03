@@ -1,10 +1,11 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 import shutil
 import os
+import io
 import fitz
 import ebooklib
 from ebooklib import epub
@@ -31,14 +32,16 @@ def analyze_with_gemini(text: str) -> dict:
     Tu tarea es identificar el título, el autor y la categoría principal del libro.
     Devuelve ÚNICAMENTE un objeto JSON con las claves "title", "author" y "category".
     Si no puedes determinar un valor, usa "Desconocido".
-    Ejemplo: {{\"title\": \"El nombre del viento\", \"author\": \"Patrick Rothfuss\", \"category\": \"Fantasía\"}}
+    Ejemplo: {{'title': 'El nombre del viento', 'author': 'Patrick Rothfuss', 'category': 'Fantasía'}}
     Texto a analizar: --- {text[:4000]} ---
     """
     try:
         response = model.generate_content(prompt)
         match = response.text.strip()
-        if match.startswith("```json"): match = match[7:]
-        if match.endswith("```"): match = match[:-3]
+        if match.startswith("```json"):
+            match = match[7:]
+        if match.endswith("```"):
+            match = match[:-3]
         return json.loads(match.strip())
     except Exception as e:
         print(f"Error al analizar con Gemini: {e}")
@@ -102,8 +105,17 @@ def process_epub(file_path: str, static_dir: str) -> dict:
 app = FastAPI()
 STATIC_COVERS_DIR = "static/covers"
 os.makedirs(STATIC_COVERS_DIR, exist_ok=True)
+STATIC_TEMP_DIR = "temp_books"
+os.makedirs(STATIC_TEMP_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "localhost:3000"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.mount("/temp_books", StaticFiles(directory=STATIC_TEMP_DIR), name="temp_books")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def get_db():
     db = database.SessionLocal()
@@ -197,3 +209,92 @@ def download_book(book_id: int, db: Session = Depends(get_db)):
             media_type='application/epub+zip',
             content_disposition_type='attachment'
         )
+
+@app.post("/tools/convert-epub-to-pdf", response_model=schemas.ConversionResponse)
+async def convert_epub_to_pdf(file: UploadFile = File(...)):
+    if not file.filename.lower().endswith('.epub'):
+        raise HTTPException(status_code=400, detail="El archivo debe ser un EPUB.")
+
+    epub_content = await file.read()
+
+    try:
+        import tempfile
+        import zipfile
+        import pathlib
+        from weasyprint import HTML, CSS
+        from bs4 import BeautifulSoup
+        import uuid
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # 1. Extraer el EPUB a una carpeta temporal
+            with zipfile.ZipFile(io.BytesIO(epub_content), 'r') as zip_ref:
+                zip_ref.extractall(temp_dir)
+
+            # 2. Encontrar el archivo .opf (el "manifiesto" del libro)
+            opf_path = next(pathlib.Path(temp_dir).rglob('*.opf'), None)
+            if not opf_path:
+                raise Exception("No se pudo encontrar el archivo .opf en el EPUB.")
+            content_root = opf_path.parent
+
+            # 3. Leer y analizar el manifiesto .opf en modo binario para autodetectar codificación
+            with open(opf_path, 'rb') as f:
+                opf_soup = BeautifulSoup(f, 'lxml-xml')
+
+            # 4. Crear una página de portada si se encuentra
+            html_docs = []
+            cover_meta = opf_soup.find('meta', {'name': 'cover'})
+            if cover_meta:
+                cover_id = cover_meta.get('content')
+                cover_item = opf_soup.find('item', {'id': cover_id})
+                if cover_item:
+                    cover_href = cover_item.get('href')
+                    cover_path = content_root / cover_href
+                    if cover_path.exists():
+                        cover_html_string = f"<html><body style='text-align: center; margin: 0; padding: 0;'><img src='{cover_path.as_uri()}' style='width: 100%; height: 100%; object-fit: contain;'/></body></html>"
+                        html_docs.append(HTML(string=cover_html_string))
+
+            # 5. Encontrar y leer todos los archivos CSS
+            stylesheets = []
+            css_items = opf_soup.find_all('item', {'media-type': 'text/css'})
+            for css_item in css_items:
+                css_href = css_item.get('href')
+                if css_href:
+                    css_path = content_root / css_href
+                    if css_path.exists():
+                        stylesheets.append(CSS(filename=css_path))
+
+            # 6. Encontrar el orden de lectura (spine) y añadir los capítulos
+            spine_ids = [item.get('idref') for item in opf_soup.find('spine').find_all('itemref')]
+            html_paths_map = {item['id']: item['href'] for item in opf_soup.find_all('item', {'media-type': 'application/xhtml+xml'})}
+            
+            for chapter_id in spine_ids:
+                href = html_paths_map.get(chapter_id)
+                if href:
+                    chapter_path = content_root / href
+                    if chapter_path.exists():
+                        # LA SOLUCIÓN: Pasar filename y encoding directamente a WeasyPrint
+                        html_docs.append(HTML(filename=chapter_path, encoding='utf-8'))
+
+            if not html_docs:
+                raise Exception("No se encontró contenido HTML en el EPUB.")
+
+            # 7. Renderizar y unir todos los documentos
+            first_doc = html_docs[0].render(stylesheets= stylesheets)
+            all_pages = [p for doc in html_docs[1:] for p in doc.render(stylesheets= stylesheets).pages]
+            
+            pdf_bytes_io = io.BytesIO()
+            first_doc.copy(all_pages).write_pdf(target=pdf_bytes_io)
+            pdf_bytes = pdf_bytes_io.getvalue()
+
+        # Guardar el PDF en la carpeta temporal pública
+        pdf_filename = f"{uuid.uuid4()}.pdf"
+        public_pdf_path = os.path.join(STATIC_TEMP_DIR, pdf_filename)
+        with open(public_pdf_path, "wb") as f:
+            f.write(pdf_bytes)
+        
+        # Devolver la URL de descarga en un JSON
+        return {"download_url": f"/temp_books/{pdf_filename}"}
+    except Exception as e:
+        error_message = f"Error durante la conversión: {type(e).__name__}: {e}"
+        print(error_message)
+        raise HTTPException(status_code=500, detail=error_message)
