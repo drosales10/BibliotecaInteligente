@@ -17,7 +17,12 @@ fileConfig(config.config_file_name)
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-from models import Base # Importa la Base de tus modelos
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from database import Base
+import models  # Importa los modelos para que Alembic los detecte
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

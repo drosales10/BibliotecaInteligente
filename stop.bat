@@ -1,22 +1,25 @@
 @echo off
 echo ========================================
-echo    Deteniendo Servidores de la Libreria
+echo   Deteniendo Servidores de la Libreria
 echo ========================================
 
-echo.
-echo Buscando y deteniendo el servidor del Frontend (en puerto 3000)...
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr :3000') do (
-    echo Cerrando proceso con PID %%a y sus subprocesos...
-    taskkill /F /PID %%a /T
+echo Deteniendo procesos de Python...
+taskkill /f /im python.exe 2>nul
+if %errorlevel% equ 0 (
+    echo Procesos de Python detenidos correctamente.
+) else (
+    echo No se encontraron procesos de Python ejecutándose.
 )
 
 echo.
-echo Buscando y deteniendo el servidor del Backend (en puerto 8001)...
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8001') do (
-    echo Cerrando proceso con PID %%a y sus subprocesos...
-    taskkill /F /PID %%a /T
+echo Deteniendo procesos de Node.js...
+taskkill /f /im node.exe 2>nul
+if %errorlevel% equ 0 (
+    echo Procesos de Node.js detenidos correctamente.
+) else (
+    echo No se encontraron procesos de Node.js ejecutándose.
 )
 
 echo.
-echo Todos los procesos han sido detenidos.
+echo Todos los servidores han sido detenidos.
 pause

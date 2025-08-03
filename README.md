@@ -37,33 +37,29 @@ Sigue estos pasos para ejecutar el proyecto en tu máquina local.
 
 La herramienta de conversión de EPUB a PDF requiere la instalación de **GTK3**. Si no instalas esta dependencia, el resto de la aplicación funcionará correctamente, pero la herramienta de conversión mostrará un error al intentar convertir.
 
-Sigue las instrucciones para tu sistema operativo:
+## 🚀 Instalación Rápida
 
-- **Windows:**
-  1. Descarga e instala **MSYS2** desde [su web oficial](https://www.msys2.org/).
-  2. Abre la terminal de MSYS2 (no la de Windows) y actualiza el sistema:
-     ```bash
-     pacman -Syu
-     ```
-  3. Cierra la terminal y vuelve a abrirla. Actualiza de nuevo:
-     ```bash
-     pacman -Su
-     ```
-  4. Instala GTK3:
-     ```bash
-     pacman -S mingw-w64-x86_64-gtk3
-     ```
-  5. Añade la carpeta `bin` de MSYS2 a tu **PATH** de Windows. Normalmente se encuentra en `C:\msys64\mingw64\bin`.
+### Requisitos Previos
 
-- **macOS (usando [Homebrew](https://brew.sh/)):**
-  ```bash
-  brew install pango
-  ```
+- **Windows 10/11** con **Miniconda** instalado
+- **Node.js 18+** (recomendado: 20.10.0)
+- **Git** (opcional, para clonar el repositorio)
 
-- **Linux (Debian/Ubuntu):**
-  ```bash
-  sudo apt-get install libpango-1.0-0 libharfbuzz0b libpangoft2-1.0-0
-  ```
+### Instalación de Miniconda (Windows)
+
+1. **Descargar Miniconda:**
+   - Ir a [Miniconda Downloads](https://docs.conda.io/en/latest/miniconda.html)
+   - Descargar la versión para Windows 64-bit
+
+2. **Instalar Miniconda:**
+   - Ejecutar el instalador como administrador
+   - Marcar "Add Miniconda3 to my PATH environment variable"
+   - Completar la instalación
+
+3. **Verificar instalación:**
+   ```bash
+   python --version  # Debe mostrar Python 3.13.2
+   ```
 
 ### 1. Clonar el Repositorio
 
@@ -78,18 +74,18 @@ cd TU_REPOSITORIO
 # Navega al directorio del backend
 cd backend
 
-# Crea y activa un entorno virtual
-python -m venv .venv
-# En Windows:
-.venv\Scripts\activate
-# En macOS/Linux:
-# source .venv/bin/activate
+# Instalar dependencias de Python
+python -m pip install fastapi uvicorn sqlalchemy alembic python-dotenv python-multipart ebooklib google-generativeai beautifulsoup4 PyMuPDF
 
-# Instala las dependencias de Python
-pip install -r requirements.txt
+# Opción 1: Usar el script automático (recomendado)
+start_backend.bat
 
-# Crea la base de datos inicial
-alembic upgrade head
+# Opción 2: Configuración manual
+# Ejecuta las migraciones de la base de datos
+python -m alembic upgrade head
+
+# Inicia el servidor
+python -m uvicorn main:app --reload --port 8001
 ```
 
 ### 3. Configurar las Variables de Entorno
@@ -117,8 +113,12 @@ Necesitarás dos terminales abiertas.
 
 - **En la Terminal 1 (para el Backend):**
   ```bash
-  # Desde la carpeta 'backend' y con el entorno virtual activado
-  uvicorn main:app --reload --port 8001
+  # Desde la carpeta 'backend'
+  # Opción 1: Usar el script automático
+  start_backend.bat
+  
+  # Opción 2: Comando manual
+  python -m uvicorn main:app --reload --port 8001
   ```
 
 - **En la Terminal 2 (para el Frontend):**

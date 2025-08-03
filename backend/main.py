@@ -26,7 +26,7 @@ models.Base.metadata.create_all(bind=database.engine)
 
 # --- Funciones de IA y Procesamiento ---
 def analyze_with_gemini(text: str) -> dict:
-    model = genai.GenerativeModel('gemini-1.5-flash-latest')
+    model = genai.GenerativeModel('gemini-2.0-flash')
     prompt = f"""
     Eres un bibliotecario experto. Analiza el siguiente texto extraído de las primeras páginas de un libro.
     Tu tarea es identificar el título, el autor y la categoría principal del libro.
@@ -172,17 +172,59 @@ def read_categories(db: Session = Depends(get_db)):
 
 @app.delete("/books/{book_id}")
 def delete_single_book(book_id: int, db: Session = Depends(get_db)):
-    book = crud.delete_book(db, book_id=book_id)
-    if not book:
-        raise HTTPException(status_code=404, detail="Libro no encontrado.")
-    return {"message": f"Libro '{book.title}' eliminado con éxito."}
+    try:
+        book = crud.delete_book(db, book_id=book_id)
+        if not book:
+            raise HTTPException(status_code=404, detail="Libro no encontrado.")
+        return {"message": f"Libro '{book.title}' eliminado con éxito."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 @app.delete("/categories/{category_name}")
 def delete_category_and_books(category_name: str, db: Session = Depends(get_db)):
-    deleted_count = crud.delete_books_by_category(db, category=category_name)
-    if deleted_count == 0:
-        raise HTTPException(status_code=404, detail=f"Categoría '{category_name}' no encontrada o ya está vacía.")
-    return {"message": f"Categoría '{category_name}' y sus {deleted_count} libros han sido eliminados."}
+    try:
+        deleted_count = crud.delete_books_by_category(db, category=category_name)
+        if deleted_count == 0:
+            raise HTTPException(status_code=404, detail=f"Categoría '{category_name}' no encontrada o ya está vacía.")
+        return {"message": f"Categoría '{category_name}' y sus {deleted_count} libros han sido eliminados."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+
+@app.delete("/books/bulk")
+def delete_multiple_books(book_ids: dict, db: Session = Depends(get_db)):
+    """
+    Elimina múltiples libros por sus IDs.
+    """
+    if not book_ids or "book_ids" not in book_ids:
+        raise HTTPException(status_code=400, detail="Se debe proporcionar al menos un ID de libro.")
+    
+    ids_to_delete = book_ids["book_ids"]
+    if not ids_to_delete:
+        raise HTTPException(status_code=400, detail="Se debe proporcionar al menos un ID de libro.")
+    
+    deleted_books = []
+    failed_deletions = []
+    
+    for book_id in ids_to_delete:
+        try:
+            book = crud.delete_book(db, book_id=book_id)
+            if book:
+                deleted_books.append(book.title)
+            else:
+                failed_deletions.append(f"Libro con ID {book_id} no encontrado")
+        except Exception as e:
+            failed_deletions.append(f"Error al eliminar libro con ID {book_id}: {str(e)}")
+    
+    result = {
+        "deleted_count": len(deleted_books),
+        "deleted_books": deleted_books,
+        "failed_deletions": failed_deletions
+    }
+    
+    if not deleted_books:
+        raise HTTPException(status_code=400, detail="No se pudo eliminar ningún libro.")
+    
+    return result
 
 @app.get("/books/download/{book_id}")
 def download_book(book_id: int, db: Session = Depends(get_db)):

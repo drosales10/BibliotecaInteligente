@@ -33,6 +33,7 @@ function UploadView() {
       setMessage('Por favor, selecciona un archivo primero.');
       return;
     }
+    
     const formData = new FormData();
     formData.append('book_file', selectedFile);
     setIsLoading(true);
@@ -43,18 +44,29 @@ function UploadView() {
         method: 'POST',
         body: formData,
       });
+      
       const result = await response.json();
+      
       if (response.ok) {
-        setMessage(`'${result.title}' ha sido añadido. Redirigiendo a la biblioteca...`);
-        setTimeout(() => navigate('/'), 2000); // Redirigir a la biblioteca después de 2s
+        setMessage(`'${result.title}' ha sido añadido exitosamente. Redirigiendo a la biblioteca...`);
+        
+        // Limpiar el estado antes de navegar
+        setSelectedFile(null);
+        setIsLoading(false);
+        
+        // Usar setTimeout para asegurar que el estado se actualice antes de navegar
+        setTimeout(() => {
+          // Navegar con replace para evitar problemas de historial
+          navigate('/', { replace: true });
+        }, 1500);
       } else {
         setMessage(`Error: ${result.detail || 'No se pudo procesar el archivo.'}`);
+        setIsLoading(false);
       }
     } catch (error) {
+      console.error('Error durante la carga:', error);
       setMessage('Error de conexión: No se pudo conectar con el backend.');
-    } finally {
       setIsLoading(false);
-      setSelectedFile(null);
     }
   };
 

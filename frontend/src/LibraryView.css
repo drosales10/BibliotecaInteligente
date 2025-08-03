@@ -4,11 +4,63 @@
   box-sizing: border-box;
 }
 
+.library-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
 .library-container h2 {
   color: #61dafb;
   border-bottom: 2px solid #61dafb;
   padding-bottom: 10px;
-  margin-bottom: 20px;
+  margin: 0;
+}
+
+.library-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.selection-mode-btn, .select-all-btn, .deselect-all-btn, .bulk-delete-btn {
+  padding: 8px 16px;
+  border: 1px solid #61dafb;
+  border-radius: 6px;
+  background-color: #282c34;
+  color: #61dafb;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: bold;
+  transition: all 0.2s;
+}
+
+.selection-mode-btn:hover, .select-all-btn:hover, .deselect-all-btn:hover {
+  background-color: #3a3f4a;
+}
+
+.selection-mode-btn.active {
+  background-color: #61dafb;
+  color: #282c34;
+}
+
+.bulk-delete-btn {
+  background-color: #dc3545;
+  border-color: #dc3545;
+  color: white;
+}
+
+.bulk-delete-btn:hover:not(:disabled) {
+  background-color: #c82333;
+  border-color: #c82333;
+}
+
+.bulk-delete-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .controls-container {
@@ -109,11 +161,33 @@
   flex-direction: column;
   justify-content: space-between;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s;
+  transition: transform 0.2s, opacity 0.3s ease-out, border-color 0.2s;
 }
 
 .book-card:hover {
   transform: translateY(-5px);
+}
+
+.book-card.selected {
+  border: 2px solid #61dafb;
+  box-shadow: 0 0 15px rgba(97, 218, 251, 0.3);
+}
+
+.book-card.deleting {
+  opacity: 0;
+  transform: scale(0.8);
+  pointer-events: none;
+}
+
+.book-checkbox {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 20px;
+  height: 20px;
+  z-index: 15;
+  cursor: pointer;
+  accent-color: #61dafb;
 }
 
 .delete-book-btn {
@@ -131,8 +205,17 @@
   text-align: center;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s, background-color 0.2s;
   z-index: 10;
+}
+
+.delete-book-btn:hover {
+  background-color: rgba(255, 107, 107, 0.8);
+}
+
+.delete-book-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .book-card:hover .delete-book-btn {
@@ -189,3 +272,162 @@
 
 .download-button:hover { background-color: #45a049; }
 .error-message { color: #ff6b6b; }
+
+/* Modal de confirmación */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal-content {
+  background-color: #282c34;
+  border: 2px solid #61dafb;
+  border-radius: 12px;
+  padding: 30px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  animation: slideIn 0.3s ease-out;
+}
+
+.modal-content h3 {
+  color: #61dafb;
+  margin: 0 0 15px 0;
+  font-size: 1.3rem;
+}
+
+.modal-content p {
+  color: #e6e6e6;
+  margin: 0 0 10px 0;
+  line-height: 1.5;
+}
+
+.warning-text {
+  color: #ff6b6b !important;
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  margin-top: 25px;
+}
+
+.btn-cancel, .btn-delete {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 100px;
+}
+
+.btn-cancel {
+  background-color: #6c757d;
+  color: white;
+}
+
+.btn-cancel:hover:not(:disabled) {
+  background-color: #5a6268;
+}
+
+.btn-delete {
+  background-color: #dc3545;
+  color: white;
+}
+
+.btn-delete:hover:not(:disabled) {
+  background-color: #c82333;
+}
+
+.btn-cancel:disabled, .btn-delete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .library-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .library-actions {
+    justify-content: center;
+  }
+  
+  .book-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 15px;
+  }
+  
+  .modal-actions {
+    flex-direction: column;
+  }
+  
+  .btn-cancel, .btn-delete {
+    width: 100%;
+  }
+}
+
+/* Modo oscuro - asegurar que los colores sean consistentes */
+@media (prefers-color-scheme: dark) {
+  .modal-content {
+    background-color: #1a1d23;
+    border-color: #61dafb;
+  }
+  
+  .modal-content h3 {
+    color: #61dafb;
+  }
+  
+  .modal-content p {
+    color: #e6e6e6;
+  }
+  
+  .btn-cancel {
+    background-color: #495057;
+  }
+  
+  .btn-cancel:hover:not(:disabled) {
+    background-color: #343a40;
+  }
+  
+  .selection-mode-btn, .select-all-btn, .deselect-all-btn {
+    background-color: #1a1d23;
+  }
+  
+  .selection-mode-btn:hover, .select-all-btn:hover, .deselect-all-btn:hover {
+    background-color: #2a2d33;
+  }
+}
