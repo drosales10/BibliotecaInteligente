@@ -249,26 +249,6 @@ def read_books(category: str | None = None, search: str | None = None, db: Sessi
 def read_categories(db: Session = Depends(get_db)):
     return crud.get_categories(db)
 
-@app.delete("/books/{book_id}")
-def delete_single_book(book_id: int, db: Session = Depends(get_db)):
-    try:
-        book = crud.delete_book(db, book_id=book_id)
-        if not book:
-            raise HTTPException(status_code=404, detail="Libro no encontrado.")
-        return {"message": f"Libro '{book.title}' eliminado con éxito."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
-
-@app.delete("/categories/{category_name}")
-def delete_category_and_books(category_name: str, db: Session = Depends(get_db)):
-    try:
-        deleted_count = crud.delete_books_by_category(db, category=category_name)
-        if deleted_count == 0:
-            raise HTTPException(status_code=404, detail=f"Categoría '{category_name}' no encontrada o ya está vacía.")
-        return {"message": f"Categoría '{category_name}' y sus {deleted_count} libros han sido eliminados."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
-
 @app.delete("/books/bulk")
 def delete_multiple_books(book_ids: dict, db: Session = Depends(get_db)):
     """
@@ -304,6 +284,26 @@ def delete_multiple_books(book_ids: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="No se pudo eliminar ningún libro.")
     
     return result
+
+@app.delete("/books/{book_id}")
+def delete_single_book(book_id: int, db: Session = Depends(get_db)):
+    try:
+        book = crud.delete_book(db, book_id=book_id)
+        if not book:
+            raise HTTPException(status_code=404, detail="Libro no encontrado.")
+        return {"message": f"Libro '{book.title}' eliminado con éxito."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+
+@app.delete("/categories/{category_name}")
+def delete_category_and_books(category_name: str, db: Session = Depends(get_db)):
+    try:
+        deleted_count = crud.delete_books_by_category(db, category=category_name)
+        if deleted_count == 0:
+            raise HTTPException(status_code=404, detail=f"Categoría '{category_name}' no encontrada o ya está vacía.")
+        return {"message": f"Categoría '{category_name}' y sus {deleted_count} libros han sido eliminados."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 @app.get("/books/download/{book_id}")
 def download_book(book_id: int, db: Session = Depends(get_db)):
