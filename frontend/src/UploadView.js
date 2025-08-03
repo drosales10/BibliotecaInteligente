@@ -146,13 +146,21 @@ function UploadView() {
           message: result.message
         });
         
-        // Crear mensaje detallado con información sobre duplicados
+        // Crear mensaje detallado con información sobre duplicados y optimización
         let detailedMessage = `✅ ${result.message}`;
         if (result.duplicates > 0) {
           detailedMessage += `\n\n📋 Resumen:\n`;
           detailedMessage += `• Libros procesados: ${result.successful}\n`;
           detailedMessage += `• Errores: ${result.failed}\n`;
           detailedMessage += `• Duplicados detectados: ${result.duplicates}`;
+        }
+        
+        // Agregar información de optimización si está disponible
+        if (result.optimization_stats) {
+          detailedMessage += `\n\n🚀 Optimización:\n`;
+          detailedMessage += `• Llamadas a IA ahorradas: ${result.optimization_stats.saved_ai_calls}\n`;
+          detailedMessage += `• Archivos únicos procesados: ${result.optimization_stats.unique_files}\n`;
+          detailedMessage += `• Duplicados detectados previamente: ${result.optimization_stats.duplicate_files}`;
         }
         
         setMessage(detailedMessage);

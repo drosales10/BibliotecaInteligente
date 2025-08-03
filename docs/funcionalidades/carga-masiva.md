@@ -116,6 +116,54 @@ with ThreadPoolExecutor(max_workers=max_workers) as executor:
 - Limpieza automática de recursos
 - Procesamiento por lotes para evitar saturación
 
+## Optimización de Verificación Previa
+
+### 🚀 Verificación Rápida de Duplicados
+
+Para optimizar el procesamiento y evitar el gasto innecesario de tokens de IA, el sistema implementa una **verificación previa rápida** que detecta duplicados antes del análisis de IA.
+
+#### **Proceso de Optimización:**
+
+1. **Verificación Previa Rápida**: Antes de procesar cada archivo, se verifica:
+   - **Nombre de archivo exacto**: Comprueba si ya existe un archivo con el mismo nombre
+   - **Tamaño de archivo**: Detecta archivos con tamaño similar (±1KB de tolerancia)
+   - **Búsqueda en base de datos**: Consulta rápida sin análisis de contenido
+
+2. **Filtrado de Archivos**: Solo los archivos únicos pasan al procesamiento con IA
+
+3. **Ahorro de Recursos**: 
+   - **Tokens de IA**: Se evitan llamadas innecesarias a la API de Gemini
+   - **Tiempo de procesamiento**: Reducción significativa en archivos duplicados
+   - **Costo**: Menor consumo de recursos de IA
+
+#### **Ejemplo de Optimización:**
+
+```
+📁 Carpeta con 100 libros
+├── 98 libros ya existentes (duplicados)
+└── 2 libros nuevos
+
+Resultado:
+✅ 98 duplicados detectados en verificación previa (sin IA)
+✅ 2 libros procesados con IA
+🚀 98 llamadas a IA ahorradas
+```
+
+#### **Estadísticas de Optimización:**
+
+La respuesta de la API incluye estadísticas detalladas:
+
+```json
+{
+  "optimization_stats": {
+    "total_files": 100,
+    "unique_files": 2,
+    "duplicate_files": 98,
+    "saved_ai_calls": 98
+  }
+}
+```
+
 ## Interfaz de Usuario
 
 ### Selector de Modo

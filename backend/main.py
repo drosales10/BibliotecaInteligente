@@ -432,9 +432,29 @@ def process_zip_containing_books(zip_path: str, temp_dir: str) -> List[str]:
     return books_found
 
 async def process_single_book_async(file_path: str, static_dir: str, db: Session) -> dict:
-    """Procesa un libro individual de forma asíncrona con verificación de duplicados"""
+    """Procesa un libro individual de forma asíncrona con verificación rápida de duplicados"""
     try:
         file_extension = Path(file_path).suffix.lower()
+        
+        # VERIFICACIÓN RÁPIDA DE DUPLICADOS (SIN IA) - ANTES DE CUALQUIER PROCESAMIENTO
+        quick_check = quick_duplicate_check(file_path, db)
+        if quick_check["is_duplicate"]:
+            return {
+                "success": False,
+                "file": file_path,
+                "error": "Duplicado detectado (verificación rápida)",
+                "duplicate_info": {
+                    "is_duplicate": True,
+                    "reason": quick_check["reason"],
+                    "existing_book": {
+                        "id": quick_check["existing_book"].id,
+                        "title": quick_check["existing_book"].title,
+                        "author": quick_check["existing_book"].author,
+                        "category": quick_check["existing_book"].category
+                    } if quick_check["existing_book"] else None,
+                    "message": quick_check["message"]
+                }
+            }
         
         # Verificar si el archivo proviene de un ZIP temporal (extraído)
         is_from_temp_zip = "extracted_" in file_path or "temp" in file_path
@@ -461,10 +481,10 @@ async def process_single_book_async(file_path: str, static_dir: str, db: Session
         else:
             return {"success": False, "file": file_path, "error": "Tipo de archivo no soportado"}
         
-        # Analizar con IA
+        # Analizar con IA (solo si pasó la verificación rápida)
         analysis = analyze_with_gemini(result["text"])
         
-        # Verificar duplicados antes de guardar
+        # Verificación final de duplicados con metadatos extraídos
         duplicate_check = crud.is_duplicate_book(
             db=db,
             title=analysis["title"],
@@ -476,7 +496,7 @@ async def process_single_book_async(file_path: str, static_dir: str, db: Session
             return {
                 "success": False,
                 "file": file_path,
-                "error": "Duplicado detectado",
+                "error": "Duplicado detectado (verificación final)",
                 "duplicate_info": {
                     "is_duplicate": True,
                     "reason": duplicate_check["reason"],
@@ -490,7 +510,7 @@ async def process_single_book_async(file_path: str, static_dir: str, db: Session
                 }
             }
         
-        # Guardar en base de datos usando la función con verificación de duplicados
+        # Guardar en base de datos
         book_result = crud.create_book_with_duplicate_check(
             db=db,
             title=analysis["title"],
@@ -568,37 +588,66 @@ async def upload_bulk_books(
                     detail="No se encontraron archivos PDF o EPUB válidos en el ZIP principal ni en los ZIPs contenidos."
                 )
             
-            # Configurar el procesamiento concurrente
-            max_workers = min(4, len(book_files))  # Máximo 4 workers concurrentes
-            results = []
+            # VERIFICACIÓN PREVIA MASIVA DE DUPLICADOS
+            bulk_check_result = bulk_quick_check(book_files, db)
+            unique_files = bulk_check_result["unique_files"]
+            duplicate_files = bulk_check_result["duplicate_files"]
+            stats = bulk_check_result["stats"]
             
-            # Procesar libros en paralelo usando ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Crear tareas para cada libro
-                future_to_file = {
-                    executor.submit(process_single_book_async, file_path, STATIC_COVERS_DIR, db): file_path
-                    for file_path in book_files
-                }
+            # Procesar solo archivos únicos concurrentemente
+            results = []
+            if unique_files:
+                max_workers = min(4, len(unique_files))  # Máximo 4 workers concurrentes
                 
-                # Recolectar resultados
-                for future in as_completed(future_to_file):
-                    result = future.result()
-                    results.append(result)
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    # Crear tareas para cada libro único
+                    future_to_file = {
+                        executor.submit(process_single_book_async, file_path, STATIC_COVERS_DIR, db): file_path
+                        for file_path in unique_files
+                    }
+                    
+                    # Recolectar resultados
+                    for future in as_completed(future_to_file):
+                        result = future.result()
+                        results.append(result)
+            
+            # Agregar resultados de duplicados detectados en verificación previa
+            for duplicate in duplicate_files:
+                results.append({
+                    "success": False,
+                    "file": duplicate["file"],
+                    "error": "Duplicado detectado (verificación previa)",
+                    "duplicate_info": {
+                        "is_duplicate": True,
+                        "reason": duplicate["reason"],
+                        "existing_book": {
+                            "id": duplicate["existing_book"].id,
+                            "title": duplicate["existing_book"].title,
+                            "author": duplicate["existing_book"].author,
+                            "category": duplicate["existing_book"].category
+                        } if duplicate["existing_book"] else None,
+                        "message": duplicate["message"]
+                    }
+                })
             
             # Resumen de resultados
             successful = [r for r in results if r["success"]]
-            failed = [r for r in results if not r["success"] and r.get("error") != "Duplicado detectado"]
-            duplicates = [r for r in results if not r["success"] and r.get("error") == "Duplicado detectado"]
+            failed = [r for r in results if not r["success"] and "Duplicado detectado" not in r.get("error", "")]
+            duplicates = [r for r in results if "Duplicado detectado" in r.get("error", "")]
+            
+            # Información de optimización
+            optimization_info = f"🚀 Optimización: Se ahorraron {stats['saved_ai_calls']} llamadas a IA detectando {stats['duplicate_files']} duplicados en verificación previa."
             
             return {
-                "message": f"Procesamiento completado. {len(successful)} libros procesados exitosamente, {len(failed)} fallaron, {len(duplicates)} duplicados detectados.",
+                "message": f"Procesamiento completado. {len(successful)} libros procesados exitosamente, {len(failed)} fallaron, {len(duplicates)} duplicados detectados. {optimization_info}",
                 "total_files": len(book_files),
                 "successful": len(successful),
                 "failed": len(failed),
                 "duplicates": len(duplicates),
                 "successful_books": successful,
                 "failed_files": failed,
-                "duplicate_files": duplicates
+                "duplicate_files": duplicates,
+                "optimization_stats": stats
             }
             
     except Exception as e:
@@ -725,6 +774,92 @@ def validate_book_file(file_path: str) -> bool:
         return True
     except Exception:
         return False
+
+def quick_duplicate_check(file_path: str, db: Session) -> dict:
+    """
+    Verificación rápida de duplicados sin análisis de IA.
+    Retorna información sobre si el archivo ya existe.
+    """
+    try:
+        filename = Path(file_path).name
+        file_size = os.path.getsize(file_path)
+        
+        # Verificar por nombre de archivo exacto
+        existing_by_filename = crud.get_book_by_filename(db, filename)
+        if existing_by_filename:
+            return {
+                "is_duplicate": True,
+                "reason": "filename_exact",
+                "existing_book": existing_by_filename,
+                "message": f"Ya existe un libro con el mismo nombre: {filename}"
+            }
+        
+        # Verificar por tamaño de archivo (aproximado)
+        # Buscar libros con tamaño similar (±1KB de tolerancia)
+        similar_size_books = db.query(models.Book).filter(
+            models.Book.file_path.like(f"%{filename}%")
+        ).all()
+        
+        for book in similar_size_books:
+            if os.path.exists(book.file_path):
+                existing_size = os.path.getsize(book.file_path)
+                if abs(existing_size - file_size) <= 1024:  # ±1KB
+                    return {
+                        "is_duplicate": True,
+                        "reason": "filename_size_similar",
+                        "existing_book": book,
+                        "message": f"Posible duplicado: {filename} (tamaño similar)"
+                    }
+        
+        return {
+            "is_duplicate": False,
+            "reason": None,
+            "existing_book": None,
+            "message": "No se encontraron duplicados en verificación rápida"
+        }
+        
+    except Exception as e:
+        return {
+            "is_duplicate": False,
+            "reason": "error",
+            "existing_book": None,
+            "message": f"Error en verificación rápida: {str(e)}"
+        }
+
+def bulk_quick_check(book_files: List[str], db: Session) -> dict:
+    """
+    Verificación previa masiva de duplicados para optimizar el procesamiento.
+    Retorna archivos únicos y duplicados detectados.
+    """
+    unique_files = []
+    duplicate_files = []
+    stats = {
+        "total_files": len(book_files),
+        "unique_files": 0,
+        "duplicate_files": 0,
+        "saved_ai_calls": 0
+    }
+    
+    for file_path in book_files:
+        quick_check = quick_duplicate_check(file_path, db)
+        if quick_check["is_duplicate"]:
+            duplicate_files.append({
+                "file": file_path,
+                "reason": quick_check["reason"],
+                "message": quick_check["message"],
+                "existing_book": quick_check["existing_book"]
+            })
+            stats["duplicate_files"] += 1
+            stats["saved_ai_calls"] += 1
+        else:
+            unique_files.append(file_path)
+            stats["unique_files"] += 1
+    
+    return {
+        "unique_files": unique_files,
+        "duplicate_files": duplicate_files,
+        "stats": stats
+    }
 
 @app.get("/books/health-check")
 def check_books_health(db: Session = Depends(get_db)):

@@ -37,6 +37,12 @@ class BulkUploadResult(BaseModel):
     error: Optional[str] = None
     duplicate_info: Optional[DuplicateInfo] = None
 
+class OptimizationStats(BaseModel):
+    total_files: int
+    unique_files: int
+    duplicate_files: int
+    saved_ai_calls: int
+
 class BulkUploadResponse(BaseModel):
     message: str
     total_files: int
@@ -46,3 +52,4 @@ class BulkUploadResponse(BaseModel):
     successful_books: List[BulkUploadResult]
     failed_files: List[BulkUploadResult]
     duplicate_files: List[BulkUploadResult]
+    optimization_stats: OptimizationStats
