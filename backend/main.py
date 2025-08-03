@@ -208,8 +208,18 @@ async def upload_book(db: Session = Depends(get_db), book_file: UploadFile = Fil
     os.makedirs(books_dir, exist_ok=True)
     file_path = os.path.abspath(os.path.join(books_dir, book_file.filename))
 
-    if crud.get_book_by_path(db, file_path):
+    # Verificar si ya existe un libro con esta ruta en la base de datos
+    existing_book = crud.get_book_by_path(db, file_path)
+    if existing_book:
         raise HTTPException(status_code=409, detail="Este libro ya ha sido añadido.")
+    
+    # Si el archivo físico existe pero no está en la base de datos, eliminarlo para evitar conflictos
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+            print(f"Archivo físico existente eliminado para reemplazo: {file_path}")
+        except OSError as e:
+            print(f"Error al eliminar archivo existente: {e}")
 
     with open(file_path, "wb") as buffer: shutil.copyfileobj(book_file.file, buffer)
 
