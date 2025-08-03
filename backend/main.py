@@ -460,23 +460,24 @@ def find_book_files(directory: str) -> List[str]:
     
     return book_files
 
-def extract_books_from_zip(zip_path: str, temp_dir: str) -> List[str]:
+def extract_books_from_zip(zip_path: str, extract_dir: str) -> List[str]:
     """Extrae libros de un archivo ZIP y retorna las rutas de los libros encontrados"""
     extracted_books = []
     
     try:
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            # Extraer el ZIP a un subdirectorio temporal
-            zip_name = Path(zip_path).stem
-            extract_dir = os.path.join(temp_dir, f"extracted_{zip_name}")
-            os.makedirs(extract_dir, exist_ok=True)
-            
+            # Extraer todos los archivos directamente al directorio de extracción
             zip_ref.extractall(extract_dir)
             
             # Buscar archivos PDF y EPUB en el contenido extraído
             for extracted_file in Path(extract_dir).rglob('*'):
                 if extracted_file.is_file() and extracted_file.suffix.lower() in {'.pdf', '.epub'}:
-                    extracted_books.append(str(extracted_file))
+                    # Verificar que el archivo existe y es accesible
+                    if os.path.exists(extracted_file) and os.access(extracted_file, os.R_OK):
+                        extracted_books.append(str(extracted_file))
+                        print(f"Archivo extraído: {extracted_file}")
+                    else:
+                        print(f"Archivo no accesible: {extracted_file}")
                     
     except Exception as e:
         print(f"Error al extraer ZIP {zip_path}: {e}")
@@ -503,7 +504,7 @@ def process_zip_containing_books(zip_path: str, temp_dir: str) -> List[str]:
     
     return books_found
 
-async def process_single_book_async(file_path: str, static_dir: str, db: Session) -> dict:
+def process_single_book_async(file_path: str, static_dir: str, db: Session) -> dict:
     """Procesa un libro individual de forma asíncrona con verificación rápida de duplicados"""
     try:
         file_extension = Path(file_path).suffix.lower()
@@ -528,22 +529,13 @@ async def process_single_book_async(file_path: str, static_dir: str, db: Session
                 }
             }
         
-        # Verificar si el archivo proviene de un ZIP temporal (extraído)
-        is_from_temp_zip = "extracted_" in file_path or "temp" in file_path
-        
-        # Si el archivo proviene de un ZIP temporal, copiarlo a un directorio permanente
-        if is_from_temp_zip:
-            books_dir = "books"
-            os.makedirs(books_dir, exist_ok=True)
-            
-            # Generar un nombre único para el archivo
-            original_filename = Path(file_path).name
-            unique_filename = f"{int(time.time())}_{original_filename}"
-            permanent_path = os.path.abspath(os.path.join(books_dir, unique_filename))
-            
-            # Copiar el archivo al directorio permanente
-            shutil.copy2(file_path, permanent_path)
-            file_path = permanent_path
+        # Verificar que el archivo existe antes de procesarlo
+        if not os.path.exists(file_path):
+            return {
+                "success": False,
+                "file": file_path,
+                "error": f"Archivo no encontrado: {file_path}"
+            }
         
         # Procesar el archivo según su tipo
         if file_extension == '.pdf':
@@ -630,102 +622,115 @@ async def upload_bulk_books(
         raise HTTPException(status_code=400, detail="El archivo debe ser un ZIP.")
     
     try:
-        # Crear directorio temporal para extraer el ZIP
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Leer y extraer el ZIP
-            zip_content = await folder_zip.read()
+        # Crear directorio permanente para extraer el ZIP
+        # Usar el directorio 'books' como base y crear una subcarpeta con el nombre del ZIP
+        books_dir = "books"
+        os.makedirs(books_dir, exist_ok=True)
+        
+        # Generar nombre único para la carpeta de extracción basado en el nombre del ZIP
+        zip_name = Path(folder_zip.filename).stem
+        timestamp = int(time.time())
+        extract_dir = os.path.join(books_dir, f"{zip_name}_{timestamp}")
+        os.makedirs(extract_dir, exist_ok=True)
+        
+        # Leer y extraer el ZIP
+        zip_content = await folder_zip.read()
+        
+        with zipfile.ZipFile(io.BytesIO(zip_content), 'r') as zip_ref:
+            zip_ref.extractall(extract_dir)
+        
+        # Encontrar todos los archivos de libros y ZIPs que contengan libros
+        all_files = find_book_files(extract_dir)
+        
+        # Separar archivos directos de libros y ZIPs
+        direct_books = [f for f in all_files if Path(f).suffix.lower() in {'.pdf', '.epub'}]
+        zip_files = [f for f in all_files if Path(f).suffix.lower() == '.zip']
+        
+        # Procesar ZIPs que contengan libros
+        books_from_zips = []
+        for zip_file in zip_files:
+            extracted_books = process_zip_containing_books(zip_file, extract_dir)
+            books_from_zips.extend(extracted_books)
+        
+        # Combinar todos los libros encontrados
+        book_files = direct_books + books_from_zips
+        
+        if not book_files:
+            # Limpiar el directorio de extracción si no se encontraron libros
+            shutil.rmtree(extract_dir, ignore_errors=True)
+            raise HTTPException(
+                status_code=400, 
+                detail="No se encontraron archivos PDF o EPUB válidos en el ZIP principal ni en los ZIPs contenidos."
+            )
+        
+        # VERIFICACIÓN PREVIA MASIVA DE DUPLICADOS
+        bulk_check_result = bulk_quick_check(book_files, db)
+        unique_files = bulk_check_result["unique_files"]
+        duplicate_files = bulk_check_result["duplicate_files"]
+        stats = bulk_check_result["stats"]
+        
+        # Procesar solo archivos únicos concurrentemente
+        results = []
+        if unique_files:
+            # Reducir workers para evitar rate limiting de la API de IA
+            max_workers = min(2, len(unique_files))  # Máximo 2 workers concurrentes
             
-            with zipfile.ZipFile(io.BytesIO(zip_content), 'r') as zip_ref:
-                zip_ref.extractall(temp_dir)
-            
-            # Encontrar todos los archivos de libros y ZIPs que contengan libros
-            all_files = find_book_files(temp_dir)
-            
-            # Separar archivos directos de libros y ZIPs
-            direct_books = [f for f in all_files if Path(f).suffix.lower() in {'.pdf', '.epub'}]
-            zip_files = [f for f in all_files if Path(f).suffix.lower() == '.zip']
-            
-            # Procesar ZIPs que contengan libros
-            books_from_zips = []
-            for zip_file in zip_files:
-                extracted_books = process_zip_containing_books(zip_file, temp_dir)
-                books_from_zips.extend(extracted_books)
-            
-            # Combinar todos los libros encontrados
-            book_files = direct_books + books_from_zips
-            
-            if not book_files:
-                raise HTTPException(
-                    status_code=400, 
-                    detail="No se encontraron archivos PDF o EPUB válidos en el ZIP principal ni en los ZIPs contenidos."
-                )
-            
-            # VERIFICACIÓN PREVIA MASIVA DE DUPLICADOS
-            bulk_check_result = bulk_quick_check(book_files, db)
-            unique_files = bulk_check_result["unique_files"]
-            duplicate_files = bulk_check_result["duplicate_files"]
-            stats = bulk_check_result["stats"]
-            
-            # Procesar solo archivos únicos concurrentemente
-            results = []
-            if unique_files:
-                # Reducir workers para evitar rate limiting de la API de IA
-                max_workers = min(2, len(unique_files))  # Máximo 2 workers concurrentes
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Crear tareas para cada libro único
+                future_to_file = {
+                    executor.submit(process_single_book_async, file_path, STATIC_COVERS_DIR, db): file_path
+                    for file_path in unique_files
+                }
                 
-                with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    # Crear tareas para cada libro único
-                    future_to_file = {
-                        executor.submit(process_single_book_async, file_path, STATIC_COVERS_DIR, db): file_path
-                        for file_path in unique_files
-                    }
+                # Recolectar resultados con delay entre procesamientos
+                for future in as_completed(future_to_file):
+                    result = future.result()
+                    results.append(result)
                     
-                    # Recolectar resultados con delay entre procesamientos
-                    for future in as_completed(future_to_file):
-                        result = future.result()
-                        results.append(result)
-                        
-                        # Pequeño delay entre procesamientos para evitar rate limiting
-                        time.sleep(0.5)
-            
-            # Agregar resultados de duplicados detectados en verificación previa
-            for duplicate in duplicate_files:
-                results.append({
-                    "success": False,
-                    "file": duplicate["file"],
-                    "error": "Duplicado detectado (verificación previa)",
-                    "duplicate_info": {
-                        "is_duplicate": True,
-                        "reason": duplicate["reason"],
-                        "existing_book": {
-                            "id": duplicate["existing_book"].id,
-                            "title": duplicate["existing_book"].title,
-                            "author": duplicate["existing_book"].author,
-                            "category": duplicate["existing_book"].category
-                        } if duplicate["existing_book"] else None,
-                        "message": duplicate["message"]
-                    }
-                })
-            
-            # Resumen de resultados
-            successful = [r for r in results if r["success"]]
-            failed = [r for r in results if not r["success"] and "Duplicado detectado" not in r.get("error", "")]
-            duplicates = [r for r in results if "Duplicado detectado" in r.get("error", "")]
-            
-            # Información de optimización
-            optimization_info = f"🚀 Optimización: Se ahorraron {stats['saved_ai_calls']} llamadas a IA detectando {stats['duplicate_files']} duplicados en verificación previa."
-            
-            return {
-                "message": f"Procesamiento completado. {len(successful)} libros procesados exitosamente, {len(failed)} fallaron, {len(duplicates)} duplicados detectados. {optimization_info}",
-                "total_files": len(book_files),
-                "successful": len(successful),
-                "failed": len(failed),
-                "duplicates": len(duplicates),
-                "successful_books": successful,
-                "failed_files": failed,
-                "duplicate_files": duplicates,
-                "optimization_stats": stats
-            }
-            
+                    # Pequeño delay entre procesamientos para evitar rate limiting
+                    time.sleep(0.5)
+        
+        # Agregar resultados de duplicados detectados en verificación previa
+        for duplicate in duplicate_files:
+            results.append({
+                "success": False,
+                "file": duplicate["file"],
+                "error": "Duplicado detectado (verificación previa)",
+                "duplicate_info": {
+                    "is_duplicate": True,
+                    "reason": duplicate["reason"],
+                    "existing_book": {
+                        "id": duplicate["existing_book"].id,
+                        "title": duplicate["existing_book"].title,
+                        "author": duplicate["existing_book"].author,
+                        "category": duplicate["existing_book"].category
+                    } if duplicate["existing_book"] else None,
+                    "message": duplicate["message"]
+                }
+            })
+        
+        # Resumen de resultados
+        successful = [r for r in results if r["success"]]
+        failed = [r for r in results if not r["success"] and "Duplicado detectado" not in r.get("error", "")]
+        duplicates = [r for r in results if "Duplicado detectado" in r.get("error", "")]
+        
+        # Información de optimización y ubicación
+        optimization_info = f"🚀 Optimización: Se ahorraron {stats['saved_ai_calls']} llamadas a IA detectando {stats['duplicate_files']} duplicados en verificación previa."
+        location_info = f"📁 Archivos extraídos en: {extract_dir}"
+        
+        return {
+            "message": f"Procesamiento completado. {len(successful)} libros procesados exitosamente, {len(failed)} fallaron, {len(duplicates)} duplicados detectados. {optimization_info} {location_info}",
+            "total_files": len(book_files),
+            "successful": len(successful),
+            "failed": len(failed),
+            "duplicates": len(duplicates),
+            "successful_books": successful,
+            "failed_files": failed,
+            "duplicate_files": duplicates,
+            "optimization_stats": stats,
+            "extract_location": extract_dir
+        }
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error durante la carga masiva: {str(e)}")
 
@@ -752,7 +757,14 @@ async def upload_folder_books(
         # Procesar ZIPs que contengan libros
         books_from_zips = []
         for zip_file in zip_files:
-            extracted_books = process_zip_containing_books(zip_file, folder_path)
+            # Crear directorio permanente para extraer el ZIP
+            zip_name = Path(zip_file).stem
+            timestamp = int(time.time())
+            extract_dir = os.path.join("books", f"{zip_name}_{timestamp}")
+            os.makedirs(extract_dir, exist_ok=True)
+            
+            # Extraer libros del ZIP al directorio permanente
+            extracted_books = extract_books_from_zip(zip_file, extract_dir)
             books_from_zips.extend(extracted_books)
         
         # Combinar todos los libros encontrados
