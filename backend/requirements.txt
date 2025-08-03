@@ -9,3 +9,4 @@ beautifulsoup4
 sqlalchemy
 alembic
 aiofiles
+google-auth-oauthlib==1.2.2
