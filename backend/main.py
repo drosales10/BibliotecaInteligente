@@ -1457,6 +1457,213 @@ def test_duplicate_detection(db: Session = Depends(get_db)):
 
 
 
+@app.get("/drive/books/")
+def get_drive_books(category: str | None = None, search: str | None = None):
+    """
+    Obtiene libros desde Google Drive
+    """
+    try:
+        from google_drive_manager import drive_manager
+        
+        if not drive_manager.service:
+            raise HTTPException(status_code=503, detail="Google Drive no está configurado")
+        
+        books = []
+        
+        if category:
+            # Obtener libros de una categoría específica
+            drive_books = drive_manager.list_books_by_category(category)
+            for book in drive_books:
+                books.append({
+                    "id": book['id'],
+                    "title": book['title'],
+                    "author": book['author'],
+                    "category": book['category'],
+                    "file_path": book['file_path'],
+                    "upload_date": book.get('upload_date'),
+                    "source": "drive"
+                })
+        else:
+            # Obtener todos los libros de todas las categorías
+            # Esto requeriría una implementación adicional en drive_manager
+            # Por ahora, devolvemos un mensaje indicando que se necesita categoría
+            raise HTTPException(status_code=400, detail="Se requiere especificar una categoría para listar libros de Drive")
+        
+        # Aplicar filtro de búsqueda si se proporciona
+        if search:
+            search_lower = search.lower()
+            books = [
+                book for book in books
+                if search_lower in book['title'].lower() or 
+                   search_lower in book['author'].lower() or
+                   search_lower in book['category'].lower()
+            ]
+        
+        return books
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener libros de Drive: {str(e)}")
+
+@app.post("/drive/books/upload")
+async def upload_book_to_drive(book_file: UploadFile = File(...)):
+    """
+    Sube un libro a Google Drive
+    """
+    try:
+        from google_drive_manager import drive_manager
+        
+        if not drive_manager.service:
+            raise HTTPException(status_code=503, detail="Google Drive no está configurado")
+        
+        # Validar archivo
+        if not book_file.filename:
+            raise HTTPException(status_code=400, detail="Nombre de archivo no válido")
+        
+        # Crear archivo temporal
+        temp_file_path = f"temp_downloads/{uuid.uuid4()}_{book_file.filename}"
+        os.makedirs("temp_downloads", exist_ok=True)
+        
+        with open(temp_file_path, "wb") as buffer:
+            shutil.copyfileobj(book_file.file, buffer)
+        
+        try:
+            # Procesar el archivo para extraer metadatos
+            static_dir = "static/covers"
+            os.makedirs(static_dir, exist_ok=True)
+            
+            if book_file.filename.lower().endswith('.pdf'):
+                book_info = process_pdf(temp_file_path, static_dir)
+            elif book_file.filename.lower().endswith('.epub'):
+                book_info = process_epub(temp_file_path, static_dir)
+            else:
+                raise HTTPException(status_code=400, detail="Formato de archivo no soportado")
+            
+            # Subir a Google Drive
+            result = drive_manager.upload_book_to_drive(
+                temp_file_path,
+                book_info['title'],
+                book_info['author'],
+                book_info['category']
+            )
+            
+            if result['success']:
+                return {
+                    "id": result['file_id'],
+                    "title": book_info['title'],
+                    "author": book_info['author'],
+                    "category": book_info['category'],
+                    "file_path": result['file_path'],
+                    "upload_date": result.get('upload_date'),
+                    "source": "drive",
+                    "message": "Libro subido exitosamente a Google Drive"
+                }
+            else:
+                raise HTTPException(status_code=500, detail=f"Error al subir a Drive: {result['error']}")
+                
+        finally:
+            # Limpiar archivo temporal
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al subir libro a Drive: {str(e)}")
+
+@app.delete("/drive/books/{book_id}")
+def delete_book_from_drive(book_id: str):
+    """
+    Elimina un libro de Google Drive
+    """
+    try:
+        from google_drive_manager import drive_manager
+        
+        if not drive_manager.service:
+            raise HTTPException(status_code=503, detail="Google Drive no está configurado")
+        
+        result = drive_manager.delete_book_from_drive(book_id)
+        
+        if result['success']:
+            return {"message": "Libro eliminado exitosamente de Google Drive"}
+        else:
+            raise HTTPException(status_code=500, detail=f"Error al eliminar de Drive: {result['error']}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al eliminar libro de Drive: {str(e)}")
+
+@app.get("/drive/books/{book_id}/content")
+def get_drive_book_content(book_id: str):
+    """
+    Obtiene el contenido de un libro desde Google Drive
+    """
+    try:
+        from google_drive_manager import drive_manager
+        
+        if not drive_manager.service:
+            raise HTTPException(status_code=503, detail="Google Drive no está configurado")
+        
+        # Descargar archivo temporalmente
+        temp_file_path = drive_manager.download_book_from_drive(book_id)
+        
+        if not temp_file_path or not os.path.exists(temp_file_path):
+            raise HTTPException(status_code=404, detail="Libro no encontrado en Drive")
+        
+        try:
+            # Leer contenido del archivo
+            if temp_file_path.lower().endswith('.pdf'):
+                # Para PDFs, devolver información básica
+                return {"message": "Contenido PDF disponible para descarga", "file_path": temp_file_path}
+            elif temp_file_path.lower().endswith('.epub'):
+                # Para EPUBs, extraer texto
+                book = epub.read_epub(temp_file_path)
+                text_content = ""
+                
+                for item in book.get_items():
+                    if item.get_type() == ebooklib.ITEM_DOCUMENT:
+                        soup = BeautifulSoup(item.get_content(), 'html.parser')
+                        text_content += soup.get_text() + "\n"
+                
+                return {"content": text_content, "file_path": temp_file_path}
+            else:
+                raise HTTPException(status_code=400, detail="Formato de archivo no soportado para lectura")
+                
+        finally:
+            # Limpiar archivo temporal después de un tiempo
+            # En producción, implementar un sistema de limpieza más robusto
+            pass
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener contenido del libro: {str(e)}")
+
+@app.get("/drive/categories/")
+def get_drive_categories():
+    """
+    Obtiene las categorías disponibles en Google Drive
+    """
+    try:
+        from google_drive_manager import drive_manager
+        
+        if not drive_manager.service:
+            raise HTTPException(status_code=503, detail="Google Drive no está configurado")
+        
+        # Obtener carpetas de categorías desde Drive
+        query = f"mimeType='application/vnd.google-apps.folder' and '{drive_manager.root_folder_id}' in parents and trashed=false"
+        results = drive_manager.service.files().list(q=query, spaces='drive', fields='files(name)').execute()
+        
+        categories = [file['name'] for file in results.get('files', [])]
+        return categories
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener categorías de Drive: {str(e)}")
+
 @app.get("/drive/status")
 def check_drive_status():
     """

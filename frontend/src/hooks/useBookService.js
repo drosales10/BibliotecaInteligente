@@ -4,16 +4,28 @@ import { useAppMode } from '../contexts/AppModeContext';
 export const useBookService = () => {
   const { appMode, isLocalMode, isDriveMode } = useAppMode();
 
-  const getBooks = useCallback(async () => {
+  const getBooks = useCallback(async (category = null, search = null) => {
     try {
       if (isLocalMode) {
-        const response = await fetch('/api/books');
+        let url = '/api/books/';
+        const params = new URLSearchParams();
+        if (category) params.append('category', category);
+        if (search) params.append('search', search);
+        if (params.toString()) url += '?' + params.toString();
+        
+        const response = await fetch(url);
         if (!response.ok) {
           throw new Error('Error al obtener libros del servidor local');
         }
         return await response.json();
       } else if (isDriveMode) {
-        const response = await fetch('/api/drive/books');
+        let url = '/api/drive/books/';
+        const params = new URLSearchParams();
+        if (category) params.append('category', category);
+        if (search) params.append('search', search);
+        if (params.toString()) url += '?' + params.toString();
+        
+        const response = await fetch(url);
         if (!response.ok) {
           throw new Error('Error al obtener libros de Google Drive');
         }
@@ -28,10 +40,10 @@ export const useBookService = () => {
   const uploadBook = useCallback(async (file) => {
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('book_file', file);
 
       if (isLocalMode) {
-        const response = await fetch('/api/books/upload', {
+        const response = await fetch('/api/upload-book/', {
           method: 'POST',
           body: formData,
         });
@@ -83,7 +95,7 @@ export const useBookService = () => {
   const getBookContent = useCallback(async (bookId) => {
     try {
       if (isLocalMode) {
-        const response = await fetch(`/api/books/${bookId}/content`);
+        const response = await fetch(`/api/books/download/${bookId}`);
         if (!response.ok) {
           throw new Error('Error al obtener contenido del libro local');
         }
@@ -93,10 +105,31 @@ export const useBookService = () => {
         if (!response.ok) {
           throw new Error('Error al obtener contenido del libro de Drive');
         }
-        return await response.text();
+        return await response.json();
       }
     } catch (error) {
       console.error('Error en getBookContent:', error);
+      throw error;
+    }
+  }, [isLocalMode, isDriveMode]);
+
+  const getCategories = useCallback(async () => {
+    try {
+      if (isLocalMode) {
+        const response = await fetch('/api/categories/');
+        if (!response.ok) {
+          throw new Error('Error al obtener categorías del servidor local');
+        }
+        return await response.json();
+      } else if (isDriveMode) {
+        const response = await fetch('/api/drive/categories/');
+        if (!response.ok) {
+          throw new Error('Error al obtener categorías de Google Drive');
+        }
+        return await response.json();
+      }
+    } catch (error) {
+      console.error('Error en getCategories:', error);
       throw error;
     }
   }, [isLocalMode, isDriveMode]);
@@ -109,5 +142,6 @@ export const useBookService = () => {
     uploadBook,
     deleteBook,
     getBookContent,
+    getCategories,
   };
 }; 
