@@ -611,9 +611,9 @@ async def convert_epub_to_pdf(file: UploadFile = File(...)):
         import tempfile
         import zipfile
         import pathlib
-        from weasyprint import HTML, CSS
         from bs4 import BeautifulSoup
         import uuid
+        import fitz  # PyMuPDF para crear PDFs
 
         with tempfile.TemporaryDirectory() as temp_dir:
             # 1. Extraer el EPUB a una carpeta temporal
@@ -626,55 +626,96 @@ async def convert_epub_to_pdf(file: UploadFile = File(...)):
                 raise Exception("No se pudo encontrar el archivo .opf en el EPUB.")
             content_root = opf_path.parent
 
-            # 3. Leer y analizar el manifiesto .opf en modo binario para autodetectar codificación
-            with open(opf_path, 'rb') as f:
-                opf_soup = BeautifulSoup(f, 'lxml-xml')
+            # 3. Leer y analizar el manifiesto .opf
+            with open(opf_path, 'r', encoding='utf-8') as f:
+                opf_content = f.read()
+            opf_soup = BeautifulSoup(opf_content, 'xml')
 
-            # 4. Crear una página de portada si se encuentra
-            html_docs = []
-            cover_meta = opf_soup.find('meta', {'name': 'cover'})
-            if cover_meta:
-                cover_id = cover_meta.get('content')
-                cover_item = opf_soup.find('item', {'id': cover_id})
-                if cover_item:
-                    cover_href = cover_item.get('href')
-                    cover_path = content_root / cover_href
-                    if cover_path.exists():
-                        cover_html_string = f"<html><body style='text-align: center; margin: 0; padding: 0;'><img src='{cover_path.as_uri()}' style='width: 100%; height: 100%; object-fit: contain;'/></body></html>"
-                        html_docs.append(HTML(string=cover_html_string))
-
-            # 5. Encontrar y leer todos los archivos CSS
-            stylesheets = []
-            css_items = opf_soup.find_all('item', {'media-type': 'text/css'})
-            for css_item in css_items:
-                css_href = css_item.get('href')
-                if css_href:
-                    css_path = content_root / css_href
-                    if css_path.exists():
-                        stylesheets.append(CSS(filename=css_path))
-
-            # 6. Encontrar el orden de lectura (spine) y añadir los capítulos
-            spine_ids = [item.get('idref') for item in opf_soup.find('spine').find_all('itemref')]
-            html_paths_map = {item['id']: item['href'] for item in opf_soup.find_all('item', {'media-type': 'application/xhtml+xml'})}
+            # 4. Extraer metadatos del libro
+            title = "Libro EPUB"
+            author = "Autor Desconocido"
             
-            for chapter_id in spine_ids:
-                href = html_paths_map.get(chapter_id)
-                if href:
-                    chapter_path = content_root / href
-                    if chapter_path.exists():
-                        # LA SOLUCIÓN: Pasar filename y encoding directamente a WeasyPrint
-                        html_docs.append(HTML(filename=chapter_path, encoding='utf-8'))
-
-            if not html_docs:
-                raise Exception("No se encontró contenido HTML en el EPUB.")
-
-            # 7. Renderizar y unir todos los documentos
-            first_doc = html_docs[0].render(stylesheets= stylesheets)
-            all_pages = [p for doc in html_docs[1:] for p in doc.render(stylesheets= stylesheets).pages]
+            # Buscar título y autor en los metadatos
+            dc_title = opf_soup.find('dc:title')
+            if dc_title:
+                title = dc_title.get_text().strip()
             
-            pdf_bytes_io = io.BytesIO()
-            first_doc.copy(all_pages).write_pdf(target=pdf_bytes_io)
-            pdf_bytes = pdf_bytes_io.getvalue()
+            dc_creator = opf_soup.find('dc:creator')
+            if dc_creator:
+                author = dc_creator.get_text().strip()
+
+            # 5. Encontrar el orden de lectura (spine) y extraer contenido
+            spine = opf_soup.find('spine')
+            if not spine:
+                raise Exception("No se pudo encontrar el spine en el EPUB.")
+
+            # Mapear IDs a archivos HTML
+            manifest = opf_soup.find('manifest')
+            html_files = {}
+            for item in manifest.find_all('item'):
+                if item.get('media-type') == 'application/xhtml+xml':
+                    html_files[item.get('id')] = item.get('href')
+
+            # 6. Crear un nuevo PDF usando PyMuPDF
+            pdf_doc = fitz.open()
+            
+            # Agregar página de título
+            title_page = pdf_doc.new_page()
+            title_page.insert_text(
+                fitz.Point(50, 300),
+                title,
+                fontsize=24
+            )
+            title_page.insert_text(
+                fitz.Point(50, 350),
+                f"por {author}",
+                fontsize=16
+            )
+
+            # 7. Procesar cada capítulo en el orden del spine
+            spine_items = spine.find_all('itemref')
+            for itemref in spine_items:
+                chapter_id = itemref.get('idref')
+                if chapter_id in html_files:
+                    html_file = html_files[chapter_id]
+                    html_path = content_root / html_file
+                    
+                    if html_path.exists():
+                        # Leer el contenido HTML
+                        with open(html_path, 'r', encoding='utf-8') as f:
+                            html_content = f.read()
+                        
+                        # Parsear HTML y extraer texto
+                        soup = BeautifulSoup(html_content, 'html.parser')
+                        
+                        # Remover scripts y estilos
+                        for script in soup(["script", "style"]):
+                            script.decompose()
+                        
+                        # Extraer texto
+                        text = soup.get_text()
+                        
+                        # Limpiar texto
+                        lines = (line.strip() for line in text.splitlines())
+                        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+                        text = ' '.join(chunk for chunk in chunks if chunk)
+                        
+                        if text.strip():
+                            # Crear nueva página para el capítulo
+                            page = pdf_doc.new_page()
+                            
+                            # Insertar texto en la página
+                            text_rect = fitz.Rect(50, 50, 550, 750)
+                            page.insert_textbox(
+                                text_rect,
+                                text,
+                                fontsize=12,
+                                align=fitz.TEXT_ALIGN_LEFT
+                            )
+
+            # 8. Guardar el PDF
+            pdf_bytes = pdf_doc.write()
+            pdf_doc.close()
 
         # Guardar el PDF en la carpeta temporal pública
         pdf_filename = f"{uuid.uuid4()}.pdf"
