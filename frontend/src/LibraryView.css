@@ -502,3 +502,40 @@
     font-size: 0.6rem;
   }
 }
+
+/* Botón de ver PDF */
+.view-pdf-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background-color: #dc2626;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 8px;
+  width: 100%;
+  text-decoration: none;
+}
+
+.view-pdf-btn:hover {
+  background-color: #b91c1c;
+  transform: translateY(-1px);
+}
+
+.view-pdf-btn:active {
+  transform: translateY(0);
+}
+
+/* Responsive design para el botón */
+@media (max-width: 768px) {
+  .view-pdf-btn {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+  }
+}

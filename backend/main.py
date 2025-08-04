@@ -1667,7 +1667,7 @@ def get_drive_categories():
 @app.post("/drive/sync-book")
 def sync_book_to_drive(book_data: dict, db: Session = Depends(get_db)):
     """
-    Sincroniza un libro desde local a Google Drive
+    Sincroniza un libro desde local a Google Drive y elimina el archivo local
     """
     try:
         from google_drive_manager import drive_manager
@@ -1701,14 +1701,35 @@ def sync_book_to_drive(book_data: dict, db: Session = Depends(get_db)):
         )
         
         if result['success']:
-            # Actualizar el libro en la base de datos para marcar que está sincronizado
-            crud.update_book_sync_status(db, book_id=book_id, synced_to_drive=True, drive_file_id=result['file_id'])
+            # Eliminar archivo local después de subir exitosamente a Drive
+            try:
+                if os.path.exists(book.file_path):
+                    os.remove(book.file_path)
+                    print(f"Archivo local eliminado: {book.file_path}")
+                
+                # Eliminar imagen de portada local si existe
+                if book.cover_image_url and os.path.exists(book.cover_image_url):
+                    os.remove(book.cover_image_url)
+                    print(f"Imagen de portada local eliminada: {book.cover_image_url}")
+                    
+            except OSError as e:
+                print(f"Error al eliminar archivos locales: {e}")
+            
+            # Actualizar el libro en la base de datos para marcar que está solo en Drive
+            crud.update_book_sync_status(
+                db, 
+                book_id=book_id, 
+                synced_to_drive=True, 
+                drive_file_id=result['file_id'],
+                remove_local_file=True  # Marcar que el archivo local fue eliminado
+            )
             
             return {
                 "success": True,
-                "message": "Libro sincronizado exitosamente a Google Drive",
+                "message": "Libro sincronizado exitosamente a Google Drive y eliminado de local",
                 "drive_file_id": result['file_id'],
-                "drive_file_path": result['file_path']
+                "drive_file_path": result['file_path'],
+                "local_file_removed": True
             }
         else:
             raise HTTPException(status_code=500, detail=f"Error al subir a Drive: {result['error']}")

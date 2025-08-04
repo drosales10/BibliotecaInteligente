@@ -44,8 +44,8 @@ const LocationIndicator = ({ book }) => {
       return { icon: '☁️', text: 'Cloud', class: 'location-cloud' };
     } else if (book.source === 'local') {
       return { icon: '💾', text: 'Local', class: 'location-local' };
-    } else if (book.synced_to_drive) {
-      return { icon: '🔄', text: 'Híbrido', class: 'location-hybrid' };
+    } else if (book.synced_to_drive && book.source === 'drive') {
+      return { icon: '☁️', text: 'Cloud', class: 'location-cloud' };
     } else {
       return { icon: '💾', text: 'Local', class: 'location-local' };
     }
@@ -305,11 +305,56 @@ function LibraryView() {
     setBooks(prevBooks => 
       prevBooks.map(book => 
         book.id === bookId 
-          ? { ...book, synced_to_drive: true, source: 'hybrid' }
+          ? { 
+              ...book, 
+              synced_to_drive: true, 
+              source: 'drive',  // Cambiar a 'drive' ya que ahora está solo en la nube
+              file_path: null,  // Limpiar la ruta local
+              drive_file_id: result.drive_file_id,
+              drive_file_path: result.drive_file_path
+            }
           : book
       )
     );
   }, []);
+
+  // Función para manejar la visualización de PDF
+  const handleViewPDF = async (book) => {
+    try {
+      // Primero intentar abrir desde local
+      if (book.file_path && book.source === 'local') {
+        // Intentar abrir el PDF local
+        const localUrl = `http://localhost:8001/books/download/${book.id}`;
+        window.open(localUrl, '_blank');
+        return;
+      }
+      
+      // Si está en Drive (incluyendo libros sincronizados), intentar desde Drive
+      if (book.source === 'drive' || book.synced_to_drive) {
+        // Descargar desde Google Drive
+        const response = await fetch(`/api/drive/books/${book.id}/content`);
+        if (response.ok) {
+          const result = await response.json();
+          if (result.file_path) {
+            // Abrir el archivo descargado temporalmente
+            window.open(`http://localhost:8001/temp_downloads/${result.file_path}`, '_blank');
+          } else {
+            alert('No se pudo obtener el archivo desde Google Drive');
+          }
+        } else {
+          alert('Error al obtener el archivo desde Google Drive');
+        }
+        return;
+      }
+      
+      // Si no está en ninguno de los dos, mostrar mensaje
+      alert('El archivo no está disponible localmente ni en Google Drive');
+      
+    } catch (error) {
+      console.error('Error al abrir PDF:', error);
+      alert('Error al abrir el archivo PDF');
+    }
+  };
 
   return (
     <div className="library-container">
@@ -392,14 +437,13 @@ function LibraryView() {
               <LocationIndicator book={book} />
               <SyncToDriveButton book={book} onSyncComplete={handleSyncComplete} />
               {book.file_path && book.file_path.toLowerCase().endsWith('.pdf') ? (
-                <a 
-                  href={`http://localhost:8001/books/download/${book.id}`}
-                  className="download-link"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button 
+                  onClick={() => handleViewPDF(book)}
+                  className="view-pdf-btn"
+                  title="Ver PDF (prioridad: Local → Cloud)"
                 >
                   📄 Ver PDF
-                </a>
+                </button>
               ) : (
                 <Link to={`/leer/${book.id}`} className="read-link">
                   📖 Leer

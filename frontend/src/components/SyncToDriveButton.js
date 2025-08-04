@@ -13,6 +13,17 @@ const SyncToDriveButton = ({ book, onSyncComplete }) => {
   }
 
   const handleSyncToDrive = async () => {
+    // Mostrar confirmación antes de sincronizar
+    const confirmSync = window.confirm(
+      '¿Estás seguro de que quieres sincronizar este libro a Google Drive?\n\n' +
+      '⚠️ ADVERTENCIA: El archivo local será eliminado después de la sincronización.\n' +
+      'El libro permanecerá solo en la nube.'
+    );
+    
+    if (!confirmSync) {
+      return;
+    }
+
     try {
       setIsSyncing(true);
       setSyncStatus('syncing');

@@ -287,7 +287,7 @@ def delete_books_by_category(db: Session, category: str):
         db.rollback()
         raise
 
-def update_book_sync_status(db: Session, book_id: int, synced_to_drive: bool, drive_file_id: str = None):
+def update_book_sync_status(db: Session, book_id: int, synced_to_drive: bool, drive_file_id: str = None, remove_local_file: bool = False):
     """
     Actualiza el estado de sincronización de un libro con Google Drive
     """
@@ -300,6 +300,11 @@ def update_book_sync_status(db: Session, book_id: int, synced_to_drive: bool, dr
         book.synced_to_drive = synced_to_drive
         if drive_file_id:
             book.drive_file_id = drive_file_id
+        
+        # Si se debe eliminar el archivo local, limpiar la ruta
+        if remove_local_file:
+            book.file_path = None
+            logger.info(f"Ruta de archivo local limpiada para el libro: {book.title}")
         
         db.commit()
         logger.info(f"Estado de sincronización actualizado para el libro: {book.title}")
