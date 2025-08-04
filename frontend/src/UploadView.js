@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDriveStatus } from './hooks/useDriveStatus';
 import './UploadView.css';
 
 function UploadView() {
@@ -11,6 +12,7 @@ function UploadView() {
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(null);
   const navigate = useNavigate();
+  const { driveStatus } = useDriveStatus();
 
   const handleFileChange = (event) => {
     setSelectedFile(event.target.files[0]);
@@ -85,6 +87,11 @@ function UploadView() {
     if (!selectedFile) {
       setMessage('Por favor, selecciona un archivo primero.');
       return;
+    }
+
+    // Verificar estado de Google Drive antes de subir
+    if (driveStatus.status !== 'ok') {
+      setMessage('⚠️ Google Drive no está configurado correctamente. Los libros se almacenarán localmente.');
     }
     
     const formData = new FormData();

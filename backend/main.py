@@ -22,13 +22,17 @@ import zipfile
 from pathlib import Path
 import time
 import threading
+import uuid
 
 import crud, models, database, schemas
 
 # --- Configuración Inicial ---
 load_dotenv(dotenv_path='../.env')
 API_KEY = os.getenv("GEMINI_API_KEY")
-if not API_KEY: raise Exception("No se encontró la GEMINI_API_KEY.")
+print(f"🔑 Clave de API cargada: {API_KEY[:10]}..." if API_KEY else "❌ No se encontró la clave de API")
+if not API_KEY: 
+    print("⚠️  ADVERTENCIA: No se encontró la GEMINI_API_KEY. La funcionalidad de IA estará limitada.")
+    API_KEY = "dummy_key"  # Clave temporal para evitar errores
 genai.configure(api_key=API_KEY)
 models.Base.metadata.create_all(bind=database.engine)
 
@@ -46,9 +50,22 @@ def analyze_with_gemini(text: str, max_retries: int = 3) -> dict:
     prompt = f"""
     Eres un bibliotecario experto. Analiza el siguiente texto extraído de las primeras páginas de un libro.
     Tu tarea es identificar el título, el autor y la categoría principal del libro.
+    
+    INSTRUCCIONES ESPECÍFICAS:
+    1. Para el TÍTULO: Busca el título principal del libro, generalmente en mayúsculas o al inicio del texto
+    2. Para el AUTOR: Busca el nombre del autor, que suele aparecer después de "por", "de", "autor:", o en la portada, también puede estar en el nombre del mismo archivo
+    3. Para la CATEGORÍA: Determina el género o categoría principal SIEMPRE EN ESPAÑOL (ej: Psicología, Literatura, Ciencia, Historia, Tecnología, Medicina, etc.)
+    4. Para la categoria te puedes guiar por el nombre de la ruta del libro, por ejemplo: "Psicología/Psicología General/Psicología Clínica"
+    5. IMPORTANTE: La categoría DEBE estar siempre en español, nunca en inglés
+    
+    CATEGORÍAS COMUNES EN ESPAÑOL:
+    - Psicología, Literatura, Ciencia, Historia, Tecnología, Medicina, Filosofía, Economía, Política, Arte, Música, Deportes, Cocina, Viajes, Biografía, Autoayuda, Religión, Educación, Derecho, Marketing, Administración, Contabilidad, Ingeniería, Arquitectura, Diseño, Fotografía, Cine, Teatro, Danza, Moda, Jardinería, Manualidades, etc.
+    
     Devuelve ÚNICAMENTE un objeto JSON con las claves "title", "author" y "category".
-    Si no puedes determinar un valor, usa "Desconocido".
+    Si no puedes determinar un valor específico, usa "Desconocido".
+    
     Ejemplo: {{'title': 'El nombre del viento', 'author': 'Patrick Rothfuss', 'category': 'Fantasía'}}
+    
     Texto a analizar: --- {text[:4000]} ---
     """
     
@@ -84,23 +101,33 @@ def analyze_with_gemini(text: str, max_retries: int = 3) -> dict:
             )
             
             match = response.text.strip()
+            print(f"Respuesta original de la IA: {match}")
+            
             if match.startswith("```json"):
                 match = match[7:]
             if match.endswith("```"):
                 match = match[:-3]
             
+            print(f"Respuesta procesada: {match}")
             result = json.loads(match.strip())
+            print(f"Resultado parseado: {result}")
             
             # Validar que el resultado tenga las claves esperadas
             if not all(key in result for key in ["title", "author", "category"]):
                 raise ValueError("Respuesta de IA incompleta")
             
+            # Traducir la categoría a español si es necesario
+            if "category" in result and result["category"]:
+                result["category"] = translate_category_to_spanish(result["category"])
+            
+            # Si la IA devuelve "Desconocido", mantenerlo (no es un error)
+            # Solo cambiar si realmente hay un error en el procesamiento
             return result
             
         except json.JSONDecodeError as e:
             print(f"Error de JSON en intento {attempt + 1}: {e}")
             if attempt == max_retries - 1:
-                return {"title": "Error de formato", "author": "Error de formato", "category": "Error de formato"}
+                return {"title": "Título no detectado", "author": "Autor no detectado", "category": "Sin categoría"}
             time.sleep(1)  # Esperar antes del retry
             
         except Exception as e:
@@ -122,9 +149,9 @@ def analyze_with_gemini(text: str, max_retries: int = 3) -> dict:
             
             if attempt == max_retries - 1:
                 print(f"Error final después de {max_retries} intentos: {e}")
-                return {"title": "Error de IA", "author": "Error de IA", "category": "Error de IA"}
+                return {"title": "Título no detectado", "author": "Autor no detectado", "category": "Sin categoría"}
     
-    return {"title": "Error de IA", "author": "Error de IA", "category": "Error de IA"}
+    return {"title": "Título no detectado", "author": "Autor no detectado", "category": "Sin categoría"}
 
 def process_pdf(file_path: str, static_dir: str) -> dict:
     doc = fitz.open(file_path)
@@ -180,6 +207,111 @@ def process_epub(file_path: str, static_dir: str) -> dict:
 
     return {"text": text, "cover_image_url": cover_path}
 
+def translate_category_to_spanish(category: str) -> str:
+    """
+    Traduce categorías comunes de inglés a español
+    """
+    if not category or category.lower() in ["desconocido", "sin categoría", "unknown"]:
+        return "Sin categoría"
+    
+    category_lower = category.lower().strip()
+    
+    # Diccionario de traducciones comunes
+    translations = {
+        # Psicología y Salud Mental
+        "psychology": "Psicología",
+        "clinical psychology": "Psicología Clínica",
+        "counseling": "Consejería",
+        "therapy": "Terapia",
+        "mental health": "Salud Mental",
+        "psychiatry": "Psiquiatría",
+        
+        # Literatura
+        "literature": "Literatura",
+        "fiction": "Ficción",
+        "non-fiction": "No Ficción",
+        "novel": "Novela",
+        "poetry": "Poesía",
+        "drama": "Drama",
+        "romance": "Romance",
+        "mystery": "Misterio",
+        "thriller": "Suspenso",
+        "fantasy": "Fantasía",
+        "science fiction": "Ciencia Ficción",
+        "horror": "Terror",
+        "biography": "Biografía",
+        "autobiography": "Autobiografía",
+        
+        # Ciencia y Tecnología
+        "science": "Ciencia",
+        "technology": "Tecnología",
+        "computer science": "Informática",
+        "programming": "Programación",
+        "engineering": "Ingeniería",
+        "mathematics": "Matemáticas",
+        "physics": "Física",
+        "chemistry": "Química",
+        "biology": "Biología",
+        "medicine": "Medicina",
+        "health": "Salud",
+        "medical": "Médico",
+        
+        # Historia y Ciencias Sociales
+        "history": "Historia",
+        "politics": "Política",
+        "economics": "Economía",
+        "sociology": "Sociología",
+        "anthropology": "Antropología",
+        "philosophy": "Filosofía",
+        "religion": "Religión",
+        "education": "Educación",
+        "law": "Derecho",
+        
+        # Arte y Cultura
+        "art": "Arte",
+        "music": "Música",
+        "cinema": "Cine",
+        "theater": "Teatro",
+        "dance": "Danza",
+        "photography": "Fotografía",
+        "design": "Diseño",
+        "architecture": "Arquitectura",
+        "fashion": "Moda",
+        
+        # Negocios y Administración
+        "business": "Negocios",
+        "management": "Administración",
+        "marketing": "Marketing",
+        "finance": "Finanzas",
+        "accounting": "Contabilidad",
+        "entrepreneurship": "Emprendimiento",
+        "leadership": "Liderazgo",
+        
+        # Otros
+        "cooking": "Cocina",
+        "travel": "Viajes",
+        "sports": "Deportes",
+        "self-help": "Autoayuda",
+        "gardening": "Jardinería",
+        "crafts": "Manualidades",
+        "parenting": "Paternidad",
+        "relationships": "Relaciones",
+        "spirituality": "Espiritualidad"
+    }
+    
+    # Buscar traducción exacta
+    if category_lower in translations:
+        return translations[category_lower]
+    
+    # Buscar traducción parcial (si contiene la palabra)
+    for english, spanish in translations.items():
+        if english in category_lower:
+            return spanish
+    
+    # Si no se encuentra traducción, devolver la categoría original
+    # pero capitalizada apropiadamente
+    return category.strip().title()
+
 # --- Configuración de la App FastAPI ---
 app = FastAPI()
 STATIC_COVERS_DIR = "static/covers"
@@ -190,7 +322,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/temp_books", StaticFiles(directory=STATIC_TEMP_DIR), name="temp_books")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:8001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -204,52 +336,125 @@ def get_db():
 # --- Rutas de la API ---
 @app.post("/upload-book/", response_model=schemas.Book)
 async def upload_book(db: Session = Depends(get_db), book_file: UploadFile = File(...)):
-    books_dir = "books"
-    os.makedirs(books_dir, exist_ok=True)
-    file_path = os.path.abspath(os.path.join(books_dir, book_file.filename))
-
-    # Verificar si ya existe un libro con esta ruta en la base de datos
-    existing_book = crud.get_book_by_path(db, file_path)
-    if existing_book:
-        raise HTTPException(status_code=409, detail="Este libro ya ha sido añadido.")
-    
-    # Si el archivo físico existe pero no está en la base de datos, eliminarlo para evitar conflictos
-    if os.path.exists(file_path):
-        try:
-            os.remove(file_path)
-            print(f"Archivo físico existente eliminado para reemplazo: {file_path}")
-        except OSError as e:
-            print(f"Error al eliminar archivo existente: {e}")
-
-    with open(file_path, "wb") as buffer: shutil.copyfileobj(book_file.file, buffer)
-
-    file_ext = os.path.splitext(book_file.filename)[1].lower()
+    """
+    Sube un libro directamente a Google Drive sin almacenamiento local permanente.
+    """
+    # Verificar que Google Drive esté configurado
     try:
-        if file_ext == ".pdf": book_data = process_pdf(file_path, STATIC_COVERS_DIR)
-        elif file_ext == ".epub": book_data = process_epub(file_path, STATIC_COVERS_DIR)
-        else: raise HTTPException(status_code=400, detail="Tipo de archivo no soportado.")
-    except HTTPException as e:
-        os.remove(file_path) # Limpiar el archivo subido si el procesamiento falla
-        raise e
+        from google_drive_manager import drive_manager
+        if not drive_manager.service:
+            raise HTTPException(
+                status_code=503, 
+                detail="Google Drive no está configurado. Configure Google Drive antes de subir libros."
+            )
+    except ImportError:
+        raise HTTPException(
+            status_code=503, 
+            detail="Google Drive no está disponible. Instale las dependencias necesarias."
+        )
 
-    gemini_result = analyze_with_gemini(book_data["text"])
-    
-    # --- Puerta de Calidad ---
-    title = gemini_result.get("title", "Desconocido")
-    author = gemini_result.get("author", "Desconocido")
-
-    if title == "Desconocido" and author == "Desconocido":
-        os.remove(file_path) # Borrar el archivo que no se pudo analizar
-        raise HTTPException(status_code=422, detail="La IA no pudo identificar el título ni el autor del libro. No se ha añadido.")
-
-    return crud.create_book(
-        db=db, 
-        title=title, 
-        author=author, 
-        category=gemini_result.get("category", "Desconocido"), 
-        cover_image_url=book_data.get("cover_image_url"), 
-        file_path=file_path
-    )
+    # Crear archivo temporal para procesamiento
+    temp_file_path = None
+    try:
+        # Crear archivo temporal
+        temp_dir = "temp_processing"
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_file_path = os.path.join(temp_dir, f"temp_{uuid.uuid4()}_{book_file.filename}")
+        
+        # Guardar archivo temporalmente para procesamiento
+        with open(temp_file_path, "wb") as buffer:
+            shutil.copyfileobj(book_file.file, buffer)
+        
+        # Procesar el archivo según su tipo
+        file_ext = os.path.splitext(book_file.filename)[1].lower()
+        try:
+            if file_ext == ".pdf":
+                book_data = process_pdf(temp_file_path, STATIC_COVERS_DIR)
+            elif file_ext == ".epub":
+                book_data = process_epub(temp_file_path, STATIC_COVERS_DIR)
+            else:
+                raise HTTPException(status_code=400, detail="Tipo de archivo no soportado.")
+        except HTTPException as e:
+            raise e
+        
+        # Analizar con IA
+        gemini_result = analyze_with_gemini(book_data["text"])
+        
+        # Usar resultados de IA o valores por defecto
+        title = gemini_result.get("title", "Título no detectado")
+        author = gemini_result.get("author", "Autor no detectado")
+        category = gemini_result.get("category", "Sin categoría")
+        
+        # Si la IA devuelve "Desconocido", mantenerlo (no es un error)
+        # Solo usar valores por defecto si realmente hay un error
+        if title == "Título no detectado" and author == "Autor no detectado":
+            # Si la IA no pudo detectar nada, usar el nombre del archivo como título
+            title = os.path.splitext(book_file.filename)[0]
+        elif title == "Desconocido":
+            # Si la IA devuelve "Desconocido" para el título, usar el nombre del archivo
+            title = os.path.splitext(book_file.filename)[0]
+        
+        # VERIFICACIÓN DE DUPLICADOS ANTES DE SUBIR A GOOGLE DRIVE
+        duplicate_check = crud.is_duplicate_book(
+            db=db,
+            title=title,
+            author=author,
+            file_path=temp_file_path
+        )
+        
+        if duplicate_check["is_duplicate"]:
+            raise HTTPException(
+                status_code=409,  # Conflict - Duplicate
+                detail=f"Libro duplicado detectado: {duplicate_check['message']}"
+            )
+        
+        # Subir a Google Drive
+        drive_info = drive_manager.upload_book_to_drive(
+            file_path=temp_file_path,
+            title=title,
+            author=author,
+            category=category
+        )
+        
+        if not drive_info:
+            raise HTTPException(
+                status_code=500, 
+                detail="No se pudo subir el libro a Google Drive. Intente nuevamente."
+            )
+        
+        print(f"✅ Libro subido a Google Drive: {title}")
+        
+        # Crear registro en base de datos usando la función con verificación de duplicados
+        result = crud.create_book_with_duplicate_check(
+            db=db, 
+            title=title, 
+            author=author, 
+            category=category, 
+            cover_image_url=book_data.get("cover_image_url"), 
+            drive_info=drive_info,
+            file_path=None  # No guardar ruta local
+        )
+        
+        if not result["success"]:
+            raise HTTPException(
+                status_code=409,  # Conflict - Duplicate
+                detail=f"Libro duplicado detectado: {result['duplicate_info']['message']}"
+            )
+        
+        return result["book"]
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error durante la carga: {e}")
+        raise HTTPException(status_code=500, detail=f"Error durante la carga: {str(e)}")
+    finally:
+        # Limpiar archivo temporal
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
+            except OSError:
+                pass  # Ignorar errores de limpieza
 
 @app.get("/books/", response_model=List[schemas.Book])
 def read_books(category: str | None = None, search: str | None = None, db: Session = Depends(get_db)):
@@ -317,47 +522,82 @@ def delete_category_and_books(category_name: str, db: Session = Depends(get_db))
 
 @app.get("/books/download/{book_id}")
 def download_book(book_id: int, db: Session = Depends(get_db)):
+    """
+    Descarga un libro desde Google Drive
+    """
     book = db.query(models.Book).filter(models.Book.id == book_id).first()
     if not book:
         raise HTTPException(status_code=404, detail="Libro no encontrado.")
     
-    # Verificar si el archivo existe
-    if not os.path.exists(book.file_path):
-        # Si el archivo no existe, podría ser un libro extraído de un ZIP
-        # Intentar buscar el archivo en el directorio de libros
-        books_dir = "books"
-        filename = os.path.basename(book.file_path)
+    # Verificar que el libro esté en Google Drive
+    if not book.drive_file_id:
+        raise HTTPException(
+            status_code=404, 
+            detail="El libro no está disponible en Google Drive."
+        )
+    
+    try:
+        from google_drive_manager import drive_manager
+        if not drive_manager.service:
+            raise HTTPException(
+                status_code=503, 
+                detail="Google Drive no está configurado."
+            )
         
-        # Buscar archivos que coincidan con el nombre (ignorando el timestamp)
-        if os.path.exists(books_dir):
-            for file in os.listdir(books_dir):
-                if file.endswith(filename) or filename in file:
-                    book.file_path = os.path.abspath(os.path.join(books_dir, file))
-                    break
+        # Obtener información del archivo desde Google Drive
+        file_info = drive_manager.service.files().get(
+            fileId=book.drive_file_id, 
+            fields='name,mimeType'
+        ).execute()
         
-        # Si aún no se encuentra, reportar error
-        if not os.path.exists(book.file_path):
+        # Descargar archivo desde Google Drive
+        temp_file_path = drive_manager.download_book_from_drive(book.drive_file_id)
+        
+        if not temp_file_path or not os.path.exists(temp_file_path):
             raise HTTPException(
                 status_code=404, 
-                detail=f"Archivo no encontrado en el disco. Ruta: {book.file_path}"
+                detail="No se pudo descargar el archivo desde Google Drive."
             )
-
-    file_ext = os.path.splitext(book.file_path)[1].lower()
-    filename = os.path.basename(book.file_path)
-    
-    if file_ext == ".pdf":
-        return FileResponse(
-            path=book.file_path,
-            filename=filename,
-            media_type='application/pdf',
-            content_disposition_type='inline'
-        )
-    else: # Para EPUB y otros tipos de archivo
-        return FileResponse(
-            path=book.file_path,
-            filename=filename,
-            media_type='application/epub+zip',
-            content_disposition_type='attachment'
+        
+        # Usar información real del archivo desde Google Drive
+        drive_filename = file_info.get('name', '')
+        mime_type = file_info.get('mimeType', '')
+        
+        # Determinar el tipo de archivo y nombre
+        if mime_type == 'application/pdf':
+            filename = book.drive_filename or f"{book.title}.pdf"
+            return FileResponse(
+                path=temp_file_path,
+                filename=filename,
+                media_type='application/pdf',
+                content_disposition_type='inline'
+            )
+        elif mime_type == 'application/epub+zip' or drive_filename.lower().endswith('.epub'):
+            filename = book.drive_filename or f"{book.title}.epub"
+            return FileResponse(
+                path=temp_file_path,
+                filename=filename,
+                media_type='application/epub+zip',
+                content_disposition_type='attachment'
+            )
+        else:
+            # Fallback: usar extensión del archivo temporal
+            file_ext = os.path.splitext(temp_file_path)[1].lower()
+            filename = book.drive_filename or f"{book.title}{file_ext}"
+            return FileResponse(
+                path=temp_file_path,
+                filename=filename,
+                media_type=mime_type or 'application/octet-stream',
+                content_disposition_type='attachment'
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error al descargar libro: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error al descargar el libro: {str(e)}"
         )
 
 @app.post("/tools/convert-epub-to-pdf", response_model=schemas.ConversionResponse)
@@ -584,6 +824,39 @@ def process_single_book_async(file_path: str, static_dir: str, db: Session) -> d
                 }
             }
         
+        # Subir a Google Drive (obligatorio)
+        try:
+            from google_drive_manager import drive_manager
+            if not drive_manager.service:
+                return {
+                    "success": False,
+                    "file": file_path,
+                    "error": "Google Drive no está configurado"
+                }
+            
+            drive_info = drive_manager.upload_book_to_drive(
+                file_path=file_path,
+                title=analysis["title"],
+                author=analysis["author"],
+                category=analysis["category"]
+            )
+            
+            if not drive_info:
+                return {
+                    "success": False,
+                    "file": file_path,
+                    "error": "No se pudo subir a Google Drive"
+                }
+            
+            print(f"✅ Libro subido a Google Drive: {analysis['title']}")
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "file": file_path,
+                "error": f"Error al subir a Google Drive: {str(e)}"
+            }
+        
         # Guardar en base de datos
         book_result = crud.create_book_with_duplicate_check(
             db=db,
@@ -591,7 +864,8 @@ def process_single_book_async(file_path: str, static_dir: str, db: Session) -> d
             author=analysis["author"],
             category=analysis["category"],
             cover_image_url=result.get("cover_image_url"),
-            file_path=file_path
+            drive_info=drive_info,
+            file_path=None  # No guardar ruta local
         )
         
         if book_result["success"]:
@@ -602,22 +876,22 @@ def process_single_book_async(file_path: str, static_dir: str, db: Session) -> d
                     "id": book_result["book"].id,
                     "title": book_result["book"].title,
                     "author": book_result["book"].author,
-                    "category": book_result["book"].category
+                    "category": book_result["book"].category,
+                    "is_in_drive": True
                 }
             }
         else:
             return {
                 "success": False,
                 "file": file_path,
-                "error": "Error al guardar en base de datos",
-                "duplicate_info": book_result["duplicate_info"]
+                "error": book_result.get("duplicate_info", {}).get("message", "Error desconocido")
             }
-        
+            
     except Exception as e:
         return {
             "success": False,
             "file": file_path,
-            "error": str(e)
+            "error": f"Error durante el procesamiento: {str(e)}"
         }
 
 @app.post("/upload-bulk/", response_model=schemas.BulkUploadResponse)
@@ -631,26 +905,40 @@ async def upload_bulk_books(
     if not folder_zip.filename.lower().endswith('.zip'):
         raise HTTPException(status_code=400, detail="El archivo debe ser un ZIP.")
     
+    # Verificar que Google Drive esté configurado
     try:
-        # Crear directorio permanente para extraer el ZIP
-        # Usar el directorio 'books' como base y crear una subcarpeta con el nombre del ZIP
-        books_dir = "books"
-        os.makedirs(books_dir, exist_ok=True)
+        from google_drive_manager import drive_manager
+        if not drive_manager.service:
+            raise HTTPException(
+                status_code=503, 
+                detail="Google Drive no está configurado. Configure Google Drive antes de subir libros."
+            )
+    except ImportError:
+        raise HTTPException(
+            status_code=503, 
+            detail="Google Drive no está disponible. Instale las dependencias necesarias."
+        )
+    
+    temp_extract_dir = None
+    try:
+        # Crear directorio temporal para extraer el ZIP
+        temp_dir = "temp_bulk_upload"
+        os.makedirs(temp_dir, exist_ok=True)
         
-        # Generar nombre único para la carpeta de extracción basado en el nombre del ZIP
+        # Generar nombre único para la carpeta de extracción temporal
         zip_name = Path(folder_zip.filename).stem
         timestamp = int(time.time())
-        extract_dir = os.path.join(books_dir, f"{zip_name}_{timestamp}")
-        os.makedirs(extract_dir, exist_ok=True)
+        temp_extract_dir = os.path.join(temp_dir, f"{zip_name}_{timestamp}")
+        os.makedirs(temp_extract_dir, exist_ok=True)
         
         # Leer y extraer el ZIP
         zip_content = await folder_zip.read()
         
         with zipfile.ZipFile(io.BytesIO(zip_content), 'r') as zip_ref:
-            zip_ref.extractall(extract_dir)
+            zip_ref.extractall(temp_extract_dir)
         
         # Encontrar todos los archivos de libros y ZIPs que contengan libros
-        all_files = find_book_files(extract_dir)
+        all_files = find_book_files(temp_extract_dir)
         
         # Separar archivos directos de libros y ZIPs
         direct_books = [f for f in all_files if Path(f).suffix.lower() in {'.pdf', '.epub'}]
@@ -659,15 +947,13 @@ async def upload_bulk_books(
         # Procesar ZIPs que contengan libros
         books_from_zips = []
         for zip_file in zip_files:
-            extracted_books = process_zip_containing_books(zip_file, extract_dir)
+            extracted_books = process_zip_containing_books(zip_file, temp_extract_dir)
             books_from_zips.extend(extracted_books)
         
         # Combinar todos los libros encontrados
         book_files = direct_books + books_from_zips
         
         if not book_files:
-            # Limpiar el directorio de extracción si no se encontraron libros
-            shutil.rmtree(extract_dir, ignore_errors=True)
             raise HTTPException(
                 status_code=400, 
                 detail="No se encontraron archivos PDF o EPUB válidos en el ZIP principal ni en los ZIPs contenidos."
@@ -704,32 +990,22 @@ async def upload_bulk_books(
         for duplicate in duplicate_files:
             results.append({
                 "success": False,
-                "file": duplicate["file"],
+                "file": duplicate,
                 "error": "Duplicado detectado (verificación previa)",
                 "duplicate_info": {
                     "is_duplicate": True,
-                    "reason": duplicate["reason"],
-                    "existing_book": {
-                        "id": duplicate["existing_book"].id,
-                        "title": duplicate["existing_book"].title,
-                        "author": duplicate["existing_book"].author,
-                        "category": duplicate["existing_book"].category
-                    } if duplicate["existing_book"] else None,
-                    "message": duplicate["message"]
+                    "reason": "Archivo ya existe en la base de datos",
+                    "message": "Este archivo ya ha sido procesado anteriormente"
                 }
             })
         
         # Resumen de resultados
         successful = [r for r in results if r["success"]]
-        failed = [r for r in results if not r["success"] and "Duplicado detectado" not in r.get("error", "")]
-        duplicates = [r for r in results if "Duplicado detectado" in r.get("error", "")]
-        
-        # Información de optimización y ubicación
-        optimization_info = f"🚀 Optimización: Se ahorraron {stats['saved_ai_calls']} llamadas a IA detectando {stats['duplicate_files']} duplicados en verificación previa."
-        location_info = f"📁 Archivos extraídos en: {extract_dir}"
+        failed = [r for r in results if not r["success"] and r.get("error") != "Duplicado detectado (verificación previa)" and r.get("error") != "Duplicado detectado (verificación rápida)" and r.get("error") != "Duplicado detectado (verificación final)"]
+        duplicates = [r for r in results if not r["success"] and (r.get("error") == "Duplicado detectado (verificación previa)" or r.get("error") == "Duplicado detectado (verificación rápida)" or r.get("error") == "Duplicado detectado (verificación final)")]
         
         return {
-            "message": f"Procesamiento completado. {len(successful)} libros procesados exitosamente, {len(failed)} fallaron, {len(duplicates)} duplicados detectados. {optimization_info} {location_info}",
+            "message": f"Procesamiento completado. {len(successful)} libros procesados exitosamente, {len(failed)} fallaron, {len(duplicates)} duplicados detectados.",
             "total_files": len(book_files),
             "successful": len(successful),
             "failed": len(failed),
@@ -737,12 +1013,21 @@ async def upload_bulk_books(
             "successful_books": successful,
             "failed_files": failed,
             "duplicate_files": duplicates,
-            "optimization_stats": stats,
-            "extract_location": extract_dir
+            "optimization_stats": stats
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"❌ Error durante la carga masiva: {e}")
         raise HTTPException(status_code=500, detail=f"Error durante la carga masiva: {str(e)}")
+    finally:
+        # Limpiar directorio temporal
+        if temp_extract_dir and os.path.exists(temp_extract_dir):
+            try:
+                shutil.rmtree(temp_extract_dir)
+            except OSError:
+                pass  # Ignorar errores de limpieza
 
 @app.post("/upload-folder/", response_model=schemas.BulkUploadResponse)
 async def upload_folder_books(
@@ -750,12 +1035,29 @@ async def upload_folder_books(
     db: Session = Depends(get_db)
 ):
     """
-    Carga masiva de libros desde una ruta de carpeta local
+    Carga masiva de libros desde una carpeta específica del sistema
     """
+    # Verificar que Google Drive esté configurado
+    try:
+        from google_drive_manager import drive_manager
+        if not drive_manager.service:
+            raise HTTPException(
+                status_code=503, 
+                detail="Google Drive no está configurado. Configure Google Drive antes de subir libros."
+            )
+    except ImportError:
+        raise HTTPException(
+            status_code=503, 
+            detail="Google Drive no está disponible. Instale las dependencias necesarias."
+        )
+    
     try:
         # Verificar que la carpeta existe
-        if not Path(folder_path).exists():
-            raise HTTPException(status_code=400, detail="La carpeta especificada no existe.")
+        if not os.path.exists(folder_path) or not os.path.isdir(folder_path):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"La carpeta especificada no existe o no es un directorio válido: {folder_path}"
+            )
         
         # Encontrar todos los archivos de libros y ZIPs que contengan libros
         all_files = find_book_files(folder_path)
@@ -767,14 +1069,7 @@ async def upload_folder_books(
         # Procesar ZIPs que contengan libros
         books_from_zips = []
         for zip_file in zip_files:
-            # Crear directorio permanente para extraer el ZIP
-            zip_name = Path(zip_file).stem
-            timestamp = int(time.time())
-            extract_dir = os.path.join("books", f"{zip_name}_{timestamp}")
-            os.makedirs(extract_dir, exist_ok=True)
-            
-            # Extraer libros del ZIP al directorio permanente
-            extracted_books = extract_books_from_zip(zip_file, extract_dir)
+            extracted_books = process_zip_containing_books(zip_file, folder_path)
             books_from_zips.extend(extracted_books)
         
         # Combinar todos los libros encontrados
@@ -787,7 +1082,7 @@ async def upload_folder_books(
             )
         
         # Configurar el procesamiento concurrente
-        max_workers = min(4, len(book_files))  # Máximo 4 workers concurrentes
+        max_workers = min(2, len(book_files))  # Máximo 2 workers concurrentes
         results = []
         
         # Procesar libros en paralelo usando ThreadPoolExecutor
@@ -805,8 +1100,8 @@ async def upload_folder_books(
         
         # Resumen de resultados
         successful = [r for r in results if r["success"]]
-        failed = [r for r in results if not r["success"] and r.get("error") != "Duplicado detectado"]
-        duplicates = [r for r in results if not r["success"] and r.get("error") == "Duplicado detectado"]
+        failed = [r for r in results if not r["success"] and r.get("error") != "Duplicado detectado (verificación rápida)" and r.get("error") != "Duplicado detectado (verificación final)"]
+        duplicates = [r for r in results if not r["success"] and (r.get("error") == "Duplicado detectado (verificación rápida)" or r.get("error") == "Duplicado detectado (verificación final)")]
         
         return {
             "message": f"Procesamiento completado. {len(successful)} libros procesados exitosamente, {len(failed)} fallaron, {len(duplicates)} duplicados detectados.",
@@ -819,8 +1114,11 @@ async def upload_folder_books(
             "duplicate_files": duplicates
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error durante la carga masiva: {str(e)}")
+        print(f"❌ Error durante la carga de carpeta: {e}")
+        raise HTTPException(status_code=500, detail=f"Error durante la carga de carpeta: {str(e)}")
 
 def cleanup_orphaned_files():
     """Limpia archivos en el directorio de libros que no están referenciados en la base de datos"""
@@ -1042,21 +1340,121 @@ def check_ai_status():
         # Hacer una llamada de prueba simple a la IA
         test_result = analyze_with_gemini("Este es un texto de prueba para verificar la API de IA.")
         
-        if "Error de IA" in test_result["title"]:
-            return {
-                "status": "error",
-                "message": "La API de IA no está respondiendo correctamente",
-                "test_result": test_result
-            }
-        else:
-            return {
-                "status": "ok",
-                "message": "La API de IA está funcionando correctamente",
-                "test_result": test_result
-            }
+        # Mostrar información detallada sobre la respuesta
+        return {
+            "status": "debug",
+            "message": "Respuesta detallada de la IA",
+            "test_result": test_result,
+            "title_check": test_result.get("title", "No encontrado"),
+            "author_check": test_result.get("author", "No encontrado"),
+            "category_check": test_result.get("category", "No encontrado")
+        }
     except Exception as e:
         return {
             "status": "error",
             "message": f"Error al verificar la API de IA: {str(e)}",
             "error_type": type(e).__name__
         }
+
+@app.get("/test/duplicate-detection")
+def test_duplicate_detection(db: Session = Depends(get_db)):
+    """
+    Endpoint de prueba para verificar la detección de duplicados
+    """
+    try:
+        # Probar con diferentes escenarios
+        test_cases = [
+            {
+                "title": "WMO Global Annual to Decadal Climate Update 2025-2029",
+                "author": "WORLD METEOROLOGICAL ORGANIZATION",
+                "file_path": None,
+                "description": "Libro existente - debería detectar duplicado"
+            },
+            {
+                "title": "Libro Nuevo Test",
+                "author": "Autor Nuevo",
+                "file_path": None,
+                "description": "Libro nuevo - no debería detectar duplicado"
+            },
+            {
+                "title": "WMO Global Annual to Decadal Climate Update 2025-2029",
+                "author": "WORLD METEOROLOGICAL ORGANIZATION",
+                "file_path": "test_file.pdf",
+                "description": "Libro existente con archivo - debería detectar duplicado"
+            }
+        ]
+        
+        results = []
+        for test_case in test_cases:
+            duplicate_check = crud.is_duplicate_book(
+                db=db,
+                title=test_case["title"],
+                author=test_case["author"],
+                file_path=test_case["file_path"]
+            )
+            
+            results.append({
+                "test_case": test_case["description"],
+                "title": test_case["title"],
+                "author": test_case["author"],
+                "file_path": test_case["file_path"],
+                "is_duplicate": duplicate_check["is_duplicate"],
+                "reason": duplicate_check["reason"],
+                "message": duplicate_check["message"]
+            })
+        
+        return {
+            "test_results": results,
+            "message": "Pruebas de detección de duplicados completadas"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error en las pruebas de duplicados: {str(e)}",
+            "error_type": type(e).__name__
+        }
+
+
+
+@app.get("/drive/status")
+def check_drive_status():
+    """
+    Verifica el estado de Google Drive
+    """
+    try:
+        from google_drive_manager import drive_manager
+        
+        if not drive_manager.service:
+            return {
+                "status": "not_configured",
+                "message": "Google Drive no está configurado",
+                "setup_required": True
+            }
+        
+        # Verificar conexión intentando obtener información de almacenamiento
+        storage_info = drive_manager.get_storage_info()
+        if storage_info:
+            return {
+                "status": "ok",
+                "message": "Google Drive está funcionando correctamente",
+                "storage_info": storage_info,
+                "setup_required": False
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "No se pudo obtener información de Google Drive",
+                "setup_required": False
+            }
+            
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error al verificar Google Drive: {str(e)}",
+            "error_type": type(e).__name__,
+            "setup_required": True
+        }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)

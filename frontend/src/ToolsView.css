@@ -84,3 +84,77 @@
   color: #61dafb;
   font-weight: bold;
 }
+
+/* Información de Google Drive */
+.drive-info-card {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 30px;
+}
+
+.drive-info-card h3 {
+  margin-top: 0;
+  color: #495057;
+  font-size: 1.2rem;
+}
+
+.drive-status-details p {
+  margin: 8px 0;
+  color: #6c757d;
+}
+
+.setup-instructions {
+  margin-top: 15px;
+  padding: 15px;
+  background-color: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 6px;
+}
+
+.setup-instructions p {
+  margin: 0 0 10px 0;
+  color: #856404;
+  font-weight: 600;
+}
+
+.setup-instructions ol {
+  margin: 0;
+  padding-left: 20px;
+  color: #856404;
+}
+
+.setup-instructions li {
+  margin: 5px 0;
+}
+
+/* Modo oscuro */
+@media (prefers-color-scheme: dark) {
+  .drive-info-card {
+    background-color: #2d3748;
+    border-color: #4a5568;
+    color: #e2e8f0;
+  }
+
+  .drive-info-card h3 {
+    color: #f7fafc;
+  }
+
+  .drive-status-details p {
+    color: #a0aec0;
+  }
+
+  .setup-instructions {
+    background-color: #4d3c00;
+    border-color: #6b5b00;
+  }
+
+  .setup-instructions p {
+    color: #fff3cd;
+  }
+
+  .setup-instructions ol {
+    color: #fff3cd;
+  }
+}

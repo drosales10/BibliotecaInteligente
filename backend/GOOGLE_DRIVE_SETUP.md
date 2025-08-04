@@ -2,6 +2,15 @@
 
 Este documento te guiará a través del proceso de configuración de Google Drive para almacenar libros organizados por categorías y orden alfabético.
 
+## ⚠️ IMPORTANTE: Almacenamiento Exclusivo en la Nube
+
+**La aplicación ahora funciona exclusivamente con Google Drive.** Los libros ya no se almacenan localmente, lo que significa:
+
+- ✅ **Ahorro de espacio en disco**: Los archivos no ocupan espacio local
+- ✅ **Acceso desde cualquier lugar**: Los libros están disponibles en la nube
+- ✅ **Organización automática**: Estructura por categorías y letras A-Z
+- ✅ **Sincronización automática**: Todos los cambios se reflejan en Drive
+
 ## 📋 Requisitos Previos
 
 - Cuenta de Google
@@ -75,6 +84,34 @@ Biblioteca Inteligente/
 - **Letras A-Z**: Se basan en la primera letra significativa del título (ignorando artículos)
 - **Artículos ignorados**: "El", "La", "Los", "Las", "Un", "Una", "The", "A", "An"
 
+## 🔄 Migración de Datos Existentes
+
+Si ya tienes libros en la aplicación, puedes migrarlos a Google Drive:
+
+### Migración Automática (Recomendado)
+
+```bash
+cd backend
+python migrate_to_drive.py
+```
+
+Este script:
+- Sube todos los libros existentes a Google Drive
+- Actualiza la base de datos con los IDs de Drive
+- Mantiene los archivos locales como respaldo
+
+### Migración a Almacenamiento Exclusivo en la Nube
+
+```bash
+cd backend
+python migrate_to_cloud_only.py
+```
+
+Este script:
+- Verifica que todos los libros estén en Google Drive
+- Elimina todos los archivos locales
+- Actualiza la base de datos para funcionar solo con Drive
+
 ## 🔍 Verificación de Configuración
 
 ### Verificar Conexión
@@ -87,6 +124,13 @@ python -c "from google_drive_manager import drive_manager; print('✅ Conexión 
 
 ```bash
 python -c "from google_drive_manager import drive_manager; info = drive_manager.get_storage_info(); print(f'Carpeta: {info[\"root_folder_name\"]}, Tamaño: {info[\"total_size_mb\"]} MB')"
+```
+
+### Verificar Estado de la Aplicación
+
+```bash
+python migrate_to_cloud_only.py
+# Selecciona opción 1 para ver el estado actual
 ```
 
 ## 🚨 Solución de Problemas
@@ -107,6 +151,13 @@ python -c "from google_drive_manager import drive_manager; info = drive_manager.
 **Solución**: 
 1. Verifica el uso de cuota en Google Cloud Console
 2. Considera actualizar a un plan de pago si es necesario
+
+### Error: "Google Drive no está configurado"
+
+**Solución**:
+1. Ejecuta `python setup_google_drive.py`
+2. Sigue las instrucciones de configuración
+3. Verifica que el archivo `token.json` se haya creado
 
 ## 📊 Monitoreo de Uso
 
@@ -135,14 +186,15 @@ for book in books:
 - Nunca compartas los archivos `credentials.json` o `token.json`
 - Usa `.gitignore` para excluir estos archivos del control de versiones
 
-## 📈 Próximos Pasos
+## 📈 Funcionalidades
 
 Una vez configurado Google Drive:
 
-1. **Migración**: Los nuevos libros se subirán automáticamente a Drive
-2. **Sincronización**: Los archivos locales se pueden eliminar después de subir a Drive
-3. **Acceso Web**: Los libros estarán disponibles a través de enlaces web
-4. **Organización**: Estructura automática por categorías y letras
+1. **Carga Individual**: Los libros se suben directamente a Drive
+2. **Carga Masiva**: ZIPs y carpetas se procesan y suben a Drive
+3. **Descarga**: Los libros se descargan temporalmente desde Drive
+4. **Eliminación**: Los libros se eliminan tanto de Drive como de la base de datos
+5. **Organización**: Estructura automática por categorías y letras
 
 ## 🆘 Soporte
 
@@ -155,4 +207,4 @@ Si encuentras problemas:
 
 ---
 
-**¡Listo!** Tu biblioteca ahora puede almacenar libros en Google Drive de manera organizada y profesional. 🎉 
+**¡Listo!** Tu biblioteca ahora funciona exclusivamente con Google Drive, ahorrando espacio local y proporcionando acceso desde cualquier lugar. 🎉 

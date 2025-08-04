@@ -30,3 +30,4 @@ __pycache__/
 # Archivos del sistema operativo
 .DS_Store
 Thumbs.db
+/backend/temp*

@@ -8,6 +8,13 @@
   color: white;
 }
 
+.header-logo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
 .header-logo h1 {
   margin: 0;
   font-size: 1.5rem;

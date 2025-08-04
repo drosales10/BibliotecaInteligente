@@ -9,6 +9,7 @@ from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 import logging
 from pathlib import Path
 import json
+import uuid
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -220,9 +221,15 @@ class GoogleDriveManager:
             logger.error(f"Error al subir libro {title} a Google Drive: {e}")
             return None
     
-    def download_book_from_drive(self, file_id, local_path):
-        """Descarga un libro desde Google Drive"""
+    def download_book_from_drive(self, file_id):
+        """Descarga un libro desde Google Drive a un archivo temporal"""
         try:
+            import tempfile
+            
+            # Crear archivo temporal
+            temp_dir = "temp_downloads"
+            os.makedirs(temp_dir, exist_ok=True)
+            
             request = self.service.files().get_media(fileId=file_id)
             fh = io.BytesIO()
             downloader = MediaIoBaseDownload(fh, request)
@@ -232,16 +239,20 @@ class GoogleDriveManager:
                 status, done = downloader.next_chunk()
                 logger.info(f"Descarga: {int(status.progress() * 100)}%")
             
-            # Guardar archivo localmente
-            with open(local_path, 'wb') as f:
+            # Crear archivo temporal con nombre único
+            temp_filename = f"temp_download_{file_id}_{uuid.uuid4().hex[:8]}"
+            temp_file_path = os.path.join(temp_dir, temp_filename)
+            
+            # Guardar archivo temporalmente
+            with open(temp_file_path, 'wb') as f:
                 f.write(fh.getvalue())
             
-            logger.info(f"Libro descargado exitosamente: {local_path}")
-            return True
+            logger.info(f"Libro descargado exitosamente: {temp_file_path}")
+            return temp_file_path
             
         except Exception as e:
             logger.error(f"Error al descargar libro desde Google Drive: {e}")
-            return False
+            return None
     
     def delete_book_from_drive(self, file_id):
         """Elimina un libro de Google Drive"""

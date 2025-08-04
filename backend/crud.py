@@ -15,7 +15,10 @@ def get_book_by_path(db: Session, file_path: str):
 def get_book_by_filename(db: Session, filename: str):
     """Busca un libro por el nombre del archivo"""
     return db.query(models.Book).filter(
-        models.Book.file_path.like(f"%{filename}")
+        or_(
+            models.Book.file_path.like(f"%{filename}"),
+            models.Book.drive_filename == filename
+        )
     ).first()
 
 def get_book_by_title_author(db: Session, title: str, author: str):
@@ -75,6 +78,21 @@ def is_duplicate_book(db: Session, title: str, author: str, file_path: str = Non
             "message": f"Posible duplicado encontrado: '{existing_fuzzy.title}' por {existing_fuzzy.author}"
         }
     
+    # Verificar por drive_file_id si se proporciona (para evitar duplicados en Google Drive)
+    if file_path:
+        # Buscar por drive_filename también
+        filename = Path(file_path).name
+        existing_by_drive_filename = db.query(models.Book).filter(
+            models.Book.drive_filename == filename
+        ).first()
+        if existing_by_drive_filename:
+            return {
+                "is_duplicate": True,
+                "reason": "drive_filename",
+                "existing_book": existing_by_drive_filename,
+                "message": f"Ya existe un libro con el mismo nombre en Google Drive: {filename}"
+            }
+    
     return {
         "is_duplicate": False,
         "reason": None,
@@ -100,20 +118,31 @@ def get_books(db: Session, category: str | None = None, search: str | None = Non
 def get_categories(db: Session) -> list[str]:
     return [c[0] for c in db.query(models.Book.category).distinct().order_by(models.Book.category).all()]
 
-def create_book(db: Session, title: str, author: str, category: str, cover_image_url: str, file_path: str):
+def create_book(db: Session, title: str, author: str, category: str, cover_image_url: str, drive_info: dict, file_path: str = None):
+    """
+    Crea un libro en la base de datos con Google Drive como almacenamiento principal
+    """
+    if not drive_info or not drive_info.get('id'):
+        raise ValueError("Se requiere información de Google Drive para crear el libro")
+    
     db_book = models.Book(
         title=title,
         author=author,
         category=category,
         cover_image_url=cover_image_url,
-        file_path=file_path
+        file_path=file_path,  # Opcional, solo para archivos temporales
+        drive_file_id=drive_info['id'],
+        drive_web_link=drive_info.get('web_view_link'),
+        drive_letter_folder=drive_info.get('letter_folder'),
+        drive_filename=drive_info.get('filename')
     )
+    
     db.add(db_book)
     db.commit()
     db.refresh(db_book)
     return db_book
 
-def create_book_with_duplicate_check(db: Session, title: str, author: str, category: str, cover_image_url: str, file_path: str):
+def create_book_with_duplicate_check(db: Session, title: str, author: str, category: str, cover_image_url: str, drive_info: dict, file_path: str = None):
     """
     Crea un libro verificando duplicados primero.
     Retorna el libro creado o información sobre el duplicado encontrado.
@@ -130,7 +159,7 @@ def create_book_with_duplicate_check(db: Session, title: str, author: str, categ
     
     # Si no es duplicado, crear el libro
     try:
-        db_book = create_book(db, title, author, category, cover_image_url, file_path)
+        db_book = create_book(db, title, author, category, cover_image_url, drive_info, file_path)
         return {
             "success": True,
             "duplicate_info": None,
@@ -146,7 +175,7 @@ def create_book_with_duplicate_check(db: Session, title: str, author: str, categ
 
 def delete_book(db: Session, book_id: int):
     """
-    Elimina un libro y sus archivos asociados de forma segura.
+    Elimina un libro de Google Drive y limpia archivos temporales locales.
     Retorna el libro eliminado o None si no se encontró.
     """
     book = db.query(models.Book).filter(models.Book.id == book_id).first()
@@ -154,21 +183,32 @@ def delete_book(db: Session, book_id: int):
         return None
     
     try:
-        # Guardar la ruta del archivo y su directorio para limpieza posterior
-        file_path = book.file_path
-        file_dir = None
-        
-        # Eliminar archivo del libro
-        if file_path and os.path.exists(file_path):
+        # Eliminar de Google Drive (obligatorio)
+        if book.drive_file_id:
             try:
-                # Obtener el directorio del archivo antes de eliminarlo
-                file_dir = os.path.dirname(file_path)
-                os.remove(file_path)
-                logger.info(f"Archivo del libro eliminado: {file_path}")
-            except OSError as e:
-                logger.warning(f"No se pudo eliminar el archivo del libro {file_path}: {e}")
+                from google_drive_manager import drive_manager
+                if drive_manager.service:
+                    success = drive_manager.delete_book_from_drive(book.drive_file_id)
+                    if success:
+                        logger.info(f"Libro eliminado de Google Drive: {book.title}")
+                    else:
+                        logger.warning(f"No se pudo eliminar de Google Drive: {book.title}")
+                else:
+                    logger.warning("Google Drive no está configurado")
+            except Exception as e:
+                logger.warning(f"Error al eliminar de Google Drive: {e}")
+        else:
+            logger.warning(f"Libro sin ID de Google Drive: {book.title}")
         
-        # Eliminar imagen de portada
+        # Limpiar archivo temporal local si existe
+        if book.file_path and os.path.exists(book.file_path):
+            try:
+                os.remove(book.file_path)
+                logger.info(f"Archivo temporal eliminado: {book.file_path}")
+            except OSError as e:
+                logger.warning(f"No se pudo eliminar el archivo temporal {book.file_path}: {e}")
+        
+        # Eliminar imagen de portada local si existe
         if book.cover_image_url and os.path.exists(book.cover_image_url):
             try:
                 os.remove(book.cover_image_url)
@@ -176,31 +216,21 @@ def delete_book(db: Session, book_id: int):
             except OSError as e:
                 logger.warning(f"No se pudo eliminar la imagen de portada {book.cover_image_url}: {e}")
         
-        # Eliminar registro de la base de datos
+        # Eliminar de la base de datos
         db.delete(book)
         db.commit()
-        logger.info(f"Libro '{book.title}' eliminado exitosamente de la base de datos")
-        
-        # Limpiar directorio vacío si es un directorio de extracción de ZIP
-        if file_dir and "books" in file_dir and os.path.exists(file_dir):
-            try:
-                # Verificar si el directorio está vacío
-                if not os.listdir(file_dir):
-                    os.rmdir(file_dir)
-                    logger.info(f"Directorio vacío eliminado: {file_dir}")
-            except OSError as e:
-                logger.warning(f"No se pudo eliminar el directorio {file_dir}: {e}")
+        logger.info(f"Libro eliminado de la base de datos: {book.title}")
         
         return book
         
     except Exception as e:
-        logger.error(f"Error al eliminar el libro {book_id}: {e}")
+        logger.error(f"Error al eliminar libro {book_id}: {e}")
         db.rollback()
-        raise
+        return None
 
 def delete_books_by_category(db: Session, category: str):
     """
-    Elimina todos los libros de una categoría específica.
+    Elimina todos los libros de una categoría específica de Google Drive.
     Retorna el número de libros eliminados.
     """
     books_to_delete = db.query(models.Book).filter(models.Book.category == category).all()
@@ -208,27 +238,35 @@ def delete_books_by_category(db: Session, category: str):
         return 0
     
     deleted_count = 0
-    directories_to_check = set()  # Para rastrear directorios que podrían quedar vacíos
     
     try:
         for book in books_to_delete:
-            # Guardar la ruta del archivo y su directorio para limpieza posterior
-            file_path = book.file_path
-            file_dir = None
-            
-            # Eliminar archivo del libro
-            if file_path and os.path.exists(file_path):
+            # Eliminar de Google Drive (obligatorio)
+            if book.drive_file_id:
                 try:
-                    # Obtener el directorio del archivo antes de eliminarlo
-                    file_dir = os.path.dirname(file_path)
-                    if file_dir and "books" in file_dir:
-                        directories_to_check.add(file_dir)
-                    os.remove(file_path)
-                    logger.info(f"Archivo del libro eliminado: {file_path}")
-                except OSError as e:
-                    logger.warning(f"No se pudo eliminar el archivo del libro {file_path}: {e}")
+                    from google_drive_manager import drive_manager
+                    if drive_manager.service:
+                        success = drive_manager.delete_book_from_drive(book.drive_file_id)
+                        if success:
+                            logger.info(f"Libro eliminado de Google Drive: {book.title}")
+                        else:
+                            logger.warning(f"No se pudo eliminar de Google Drive: {book.title}")
+                    else:
+                        logger.warning("Google Drive no está configurado")
+                except Exception as e:
+                    logger.warning(f"Error al eliminar de Google Drive: {e}")
+            else:
+                logger.warning(f"Libro sin ID de Google Drive: {book.title}")
             
-            # Eliminar imagen de portada
+            # Limpiar archivo temporal local si existe
+            if book.file_path and os.path.exists(book.file_path):
+                try:
+                    os.remove(book.file_path)
+                    logger.info(f"Archivo temporal eliminado: {book.file_path}")
+                except OSError as e:
+                    logger.warning(f"No se pudo eliminar el archivo temporal {book.file_path}: {e}")
+            
+            # Eliminar imagen de portada local si existe
             if book.cover_image_url and os.path.exists(book.cover_image_url):
                 try:
                     os.remove(book.cover_image_url)
@@ -241,17 +279,6 @@ def delete_books_by_category(db: Session, category: str):
         
         db.commit()
         logger.info(f"Categoría '{category}' eliminada con {deleted_count} libros")
-        
-        # Limpiar directorios vacíos después de eliminar todos los libros
-        for directory in directories_to_check:
-            if os.path.exists(directory):
-                try:
-                    # Verificar si el directorio está vacío
-                    if not os.listdir(directory):
-                        os.rmdir(directory)
-                        logger.info(f"Directorio vacío eliminado: {directory}")
-                except OSError as e:
-                    logger.warning(f"No se pudo eliminar el directorio {directory}: {e}")
         
         return deleted_count
         

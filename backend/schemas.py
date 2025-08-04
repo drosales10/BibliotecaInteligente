@@ -6,10 +6,15 @@ class BookBase(BaseModel):
     author: str
     category: str
     cover_image_url: str | None = None
-    file_path: str
+    file_path: Optional[str] = None  # Ahora es opcional
 
 class Book(BookBase):
     id: int
+    # Campos para Google Drive (almacenamiento principal)
+    drive_file_id: Optional[str] = None  # Opcional para compatibilidad con libros existentes
+    drive_web_link: Optional[str] = None
+    drive_letter_folder: Optional[str] = None
+    drive_filename: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -22,7 +27,7 @@ class BookCreate(BaseModel):
     author: str
     category: str
     cover_image_url: Optional[str] = None
-    file_path: str
+    file_path: Optional[str] = None  # Ahora es opcional
 
 class DuplicateInfo(BaseModel):
     is_duplicate: bool

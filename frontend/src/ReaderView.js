@@ -7,6 +7,8 @@ function ReaderView() {
   const { bookId } = useParams();
   const [location, setLocation] = useState(null);
   const [epubData, setEpubData] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const [fileType, setFileType] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -19,10 +21,36 @@ function ReaderView() {
         if (!response.ok) {
           throw new Error('No se pudo obtener el libro desde el servidor.');
         }
-        const data = await response.arrayBuffer();
-        setEpubData(data);
+        
+        // Detectar el tipo de archivo basándose en el Content-Type
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('application/pdf')) {
+          // Es un PDF - crear URL para el visor
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          setPdfUrl(url);
+          setFileType('pdf');
+        } else if (contentType && contentType.includes('application/epub+zip')) {
+          // Es un EPUB - usar ReactReader
+          const data = await response.arrayBuffer();
+          setEpubData(data);
+          setFileType('epub');
+        } else {
+          // Tipo desconocido - intentar descargar
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `libro_${bookId}`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          setError("Archivo descargado. No se puede previsualizar este tipo de archivo.");
+        }
       } catch (err) {
-        console.error("Error al obtener los datos del EPUB:", err);
+        console.error("Error al obtener los datos del libro:", err);
         setError("No se pudo cargar el libro.");
       } finally {
         setIsLoading(false);
@@ -30,6 +58,13 @@ function ReaderView() {
     };
 
     fetchBookData();
+
+    // Función de limpieza para liberar URLs de objetos
+    return () => {
+      if (pdfUrl) {
+        URL.revokeObjectURL(pdfUrl);
+      }
+    };
   }, [bookId]);
 
   return (
@@ -37,7 +72,16 @@ function ReaderView() {
       <div className="reader-wrapper">
         {isLoading && <div className="loading-view">Cargando Libro...</div>}
         {error && <div className="loading-view">{error}</div>}
-        {!isLoading && !error && epubData && (
+        {!isLoading && !error && fileType === 'pdf' && pdfUrl && (
+          <iframe
+            src={pdfUrl}
+            title="PDF Viewer"
+            width="100%"
+            height="100%"
+            style={{ border: 'none' }}
+          />
+        )}
+        {!isLoading && !error && fileType === 'epub' && epubData && (
           <ReactReader
             url={epubData}
             location={location}
