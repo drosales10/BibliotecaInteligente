@@ -37,11 +37,11 @@ Sigue estos pasos para ejecutar el proyecto en tu máquina local.
 
 La herramienta de conversión de EPUB a PDF requiere la instalación de **GTK3**. Si no instalas esta dependencia, el resto de la aplicación funcionará correctamente, pero la herramienta de conversión mostrará un error al intentar convertir.
 
-## 🚀 Instalación Rápida
+## 🚀 Instalación Rápida con Entorno Virtual
 
 ### Requisitos Previos
 
-- **Windows 10/11** con **Miniconda** instalado
+- **Python 3.9+** instalado en el sistema
 - **Node.js 18+** (recomendado: 20.10.0)
 - **Git** (opcional, para clonar el repositorio)
 
@@ -68,27 +68,42 @@ git clone https://github.com/TU_USUARIO/TU_REPOSITORIO.git
 cd TU_REPOSITORIO
 ```
 
-### 2. Configurar el Backend
+### 2. Configurar el Entorno Virtual (Recomendado)
 
 ```bash
-# Navega al directorio del backend
-cd backend
-
-# Instalar dependencias de Python
-python -m pip install fastapi uvicorn sqlalchemy alembic python-dotenv python-multipart ebooklib google-generativeai beautifulsoup4 PyMuPDF
-
-# Opción 1: Usar el script automático (recomendado)
-start_backend.bat
-
-# Opción 2: Configuración manual
-# Ejecuta las migraciones de la base de datos
-python -m alembic upgrade head
-
-# Inicia el servidor
-python -m uvicorn main:app --reload --port 8001
+# Configuración automática del entorno virtual
+setup_environment.bat
 ```
 
-### 3. Configurar las Variables de Entorno
+Este script:
+- Crea un entorno virtual de Python
+- Instala todas las dependencias del backend
+- Instala las dependencias del frontend
+- Configura todo automáticamente
+
+### 3. Configuración Manual (Alternativa)
+
+Si prefieres configurar manualmente:
+
+```bash
+# Crear entorno virtual
+python -m venv venv
+
+# Activar entorno virtual
+venv\Scripts\activate.bat
+
+# Instalar dependencias del backend
+cd backend
+pip install -r requirements.txt
+cd ..
+
+# Instalar dependencias del frontend
+cd frontend
+npm install
+cd ..
+```
+
+### 4. Configurar las Variables de Entorno
 
 En la raíz del proyecto, crea un archivo llamado `.env` y añade tu clave de API de Gemini. Puedes usar el archivo `.env.example` como plantilla.
 
@@ -97,37 +112,39 @@ En la raíz del proyecto, crea un archivo llamado `.env` y añade tu clave de AP
 GEMINI_API_KEY="TU_API_KEY_DE_GEMINI_AQUI"
 ```
 
-### 4. Configurar el Frontend
-
-```bash
-# Desde la raíz del proyecto, navega al directorio del frontend
-cd frontend
-
-# Instala las dependencias de Node.js
-npm install
-```
-
 ### 5. ¡Ejecutar la Aplicación!
 
-Necesitarás dos terminales abiertas.
+```bash
+# Ejecutar todo con un solo comando
+start.bat
+```
 
-- **En la Terminal 1 (para el Backend):**
-  ```bash
-  # Desde la carpeta 'backend'
-  # Opción 1: Usar el script automático
-  start_backend.bat
-  
-  # Opción 2: Comando manual
-  python -m uvicorn main:app --reload --port 8001
-  ```
-
-- **En la Terminal 2 (para el Frontend):**
-  ```bash
-  # Desde la carpeta 'frontend'
-  npm start
-  ```
+Este script:
+- Activa automáticamente el entorno virtual
+- Inicia el servidor backend en http://localhost:8001
+- Inicia el servidor frontend en http://localhost:3000
 
 ¡Abre tu navegador en `http://localhost:3000` y empieza a construir tu librería inteligente!
+
+## 🔧 Gestión del Entorno Virtual
+
+### Comandos Útiles
+
+```bash
+# Activar entorno virtual manualmente
+venv\Scripts\activate.bat
+
+# Desactivar entorno virtual
+deactivate_env.bat
+
+# Limpiar y recrear entorno virtual
+clean_environment.bat
+
+# Detener todos los servidores
+stop.bat
+```
+
+Para más información sobre el entorno virtual, consulta [ENTORNO_VIRTUAL.md](ENTORNO_VIRTUAL.md).
 
 ## 📄 Licencia
 
