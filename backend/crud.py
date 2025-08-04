@@ -286,3 +286,27 @@ def delete_books_by_category(db: Session, category: str):
         logger.error(f"Error al eliminar libros de la categoría '{category}': {e}")
         db.rollback()
         raise
+
+def update_book_sync_status(db: Session, book_id: int, synced_to_drive: bool, drive_file_id: str = None):
+    """
+    Actualiza el estado de sincronización de un libro con Google Drive
+    """
+    try:
+        book = db.query(models.Book).filter(models.Book.id == book_id).first()
+        if not book:
+            logger.error(f"Libro no encontrado para actualizar estado de sincronización: {book_id}")
+            return None
+        
+        book.synced_to_drive = synced_to_drive
+        if drive_file_id:
+            book.drive_file_id = drive_file_id
+        
+        db.commit()
+        logger.info(f"Estado de sincronización actualizado para el libro: {book.title}")
+        
+        return book
+        
+    except Exception as e:
+        logger.error(f"Error al actualizar estado de sincronización del libro {book_id}: {e}")
+        db.rollback()
+        return None

@@ -431,3 +431,74 @@
     background-color: #2a2d33;
   }
 }
+
+/* Indicador de ubicación */
+.location-indicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  backdrop-filter: blur(8px);
+  border: 1px solid;
+  z-index: 2;
+}
+
+.location-indicator.location-local {
+  background-color: rgba(45, 90, 45, 0.9);
+  color: #4ade80;
+  border-color: #4ade80;
+}
+
+.location-indicator.location-cloud {
+  background-color: rgba(30, 58, 138, 0.9);
+  color: #60a5fa;
+  border-color: #60a5fa;
+}
+
+.location-indicator.location-hybrid {
+  background-color: rgba(120, 53, 15, 0.9);
+  color: #fbbf24;
+  border-color: #fbbf24;
+}
+
+.location-icon {
+  font-size: 0.8rem;
+}
+
+.location-text {
+  font-size: 0.7rem;
+}
+
+/* Ajustar posición del botón de eliminar para no solaparse con el indicador */
+.delete-book-btn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+}
+
+/* Responsive design para el indicador */
+@media (max-width: 768px) {
+  .location-indicator {
+    top: 4px;
+    right: 4px;
+    padding: 2px 6px;
+    font-size: 0.65rem;
+  }
+  
+  .location-icon {
+    font-size: 0.7rem;
+  }
+  
+  .location-text {
+    font-size: 0.6rem;
+  }
+}

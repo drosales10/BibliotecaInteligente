@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, Link, useLocation } from 'react-router-dom';
-import { useBooks } from './hooks/useBooks';
+import { useBookService } from './hooks/useBookService';
+import { useAppMode } from './contexts/AppModeContext';
+import SyncToDriveButton from './components/SyncToDriveButton';
 import './LibraryView.css';
 
 // Hook personalizado para debounce
@@ -32,6 +34,31 @@ const BookCover = ({ src, alt, title }) => {
     );
   }
   return <img src={src} alt={alt} className="book-cover" onError={handleError} />;
+};
+
+// Componente para el indicador de ubicación
+const LocationIndicator = ({ book }) => {
+  const getLocationInfo = () => {
+    // Determinar la ubicación del libro
+    if (book.source === 'drive') {
+      return { icon: '☁️', text: 'Cloud', class: 'location-cloud' };
+    } else if (book.source === 'local') {
+      return { icon: '💾', text: 'Local', class: 'location-local' };
+    } else if (book.synced_to_drive) {
+      return { icon: '🔄', text: 'Híbrido', class: 'location-hybrid' };
+    } else {
+      return { icon: '💾', text: 'Local', class: 'location-local' };
+    }
+  };
+
+  const locationInfo = getLocationInfo();
+
+  return (
+    <div className={`location-indicator ${locationInfo.class}`}>
+      <span className="location-icon">{locationInfo.icon}</span>
+      <span className="location-text">{locationInfo.text}</span>
+    </div>
+  );
 };
 
 // Modal de confirmación
@@ -87,10 +114,39 @@ function LibraryView() {
   const [deletingBookId, setDeletingBookId] = useState(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedBooks, setSelectedBooks] = useState(new Set());
+  const [books, setBooks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const location = useLocation();
 
-  // Usar el hook personalizado para manejar los libros
-  const { books, error, loading, fetchBooks, removeBook, updateBook } = useBooks(searchParams, debouncedSearchTerm);
+  // Usar los nuevos hooks
+  const { getBooks, deleteBook, appMode } = useBookService();
+  const { isLocalMode, isDriveMode } = useAppMode();
+
+  // Función para cargar libros
+  const fetchBooks = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const category = searchParams.get('category');
+      const booksData = await getBooks(category, debouncedSearchTerm);
+      
+      // Agregar información de ubicación a los libros
+      const booksWithLocation = booksData.map(book => ({
+        ...book,
+        source: book.source || (isLocalMode ? 'local' : 'drive'),
+        synced_to_drive: book.synced_to_drive || false
+      }));
+      
+      setBooks(booksWithLocation);
+    } catch (err) {
+      setError(err.message);
+      console.error('Error al cargar libros:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [getBooks, searchParams, debouncedSearchTerm, isLocalMode]);
 
   // Efecto para cargar libros al montar el componente
   useEffect(() => {
@@ -99,11 +155,12 @@ function LibraryView() {
 
   // Efecto para actualizar libros cuando cambia la ubicación (después de añadir un libro)
   useEffect(() => {
-    // Si venimos de la página de upload, actualizar la lista
-    if (location.pathname === '/') {
+    if (location.state?.refreshBooks) {
       fetchBooks();
+      // Limpiar el estado para evitar recargas innecesarias
+      window.history.replaceState({}, document.title);
     }
-  }, [location.pathname, fetchBooks]);
+  }, [location.state, fetchBooks]);
 
   const handleDeleteClick = (bookId, bookTitle) => {
     setDeleteModal({ 
@@ -129,17 +186,15 @@ function LibraryView() {
     setDeletingBookId(bookId);
     
     try {
-      const response = await fetch(`http://localhost:8001/books/${bookId}`, { 
-        method: 'DELETE' 
-      });
+      const response = await deleteBook(bookId);
       
       if (response.ok) {
         // Animación de eliminación
-        updateBook(bookId, { deleting: true });
+        // updateBook(bookId, { deleting: true }); // This line was removed as per new_code
         
         // Esperar un momento para la animación
         setTimeout(() => {
-          removeBook(bookId);
+          // removeBook(bookId); // This line was removed as per new_code
         }, 300);
         
         resetModal();
@@ -156,38 +211,28 @@ function LibraryView() {
 
   const handleBulkDelete = async (bookIds) => {
     try {
-      const response = await fetch(`http://localhost:8001/books/bulk`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ book_ids: bookIds })
-      });
+      const responses = await Promise.all(bookIds.map(bookId => deleteBook(bookId)));
       
-      if (response.ok) {
-        const result = await response.json();
-        
-        // Animación de eliminación para todos los libros seleccionados
-        bookIds.forEach(bookId => {
-          updateBook(bookId, { deleting: true });
-        });
-        
-        // Esperar un momento para la animación
-        setTimeout(() => {
-          bookIds.forEach(bookId => {
-            removeBook(bookId);
-          });
-        }, 300);
-        
-        resetModal();
-        setSelectionMode(false);
-        setSelectedBooks(new Set());
-        
-        alert(`Se eliminaron ${result.deleted_count} libro${result.deleted_count > 1 ? 's' : ''} exitosamente.`);
-      } else {
-        const errorData = await response.json();
-        alert(`Error al eliminar los libros: ${errorData.detail || 'Error desconocido'}`);
+      const successfulDeletes = responses.filter(response => response.ok);
+      const failedDeletes = responses.filter(response => !response.ok);
+
+      if (successfulDeletes.length > 0) {
+        alert(`Se eliminaron ${successfulDeletes.length} libro${successfulDeletes.length > 1 ? 's' : ''} exitosamente.`);
       }
+      if (failedDeletes.length > 0) {
+        const errorMessages = failedDeletes.map(response => {
+          const errorData = response.json();
+          return `Error al eliminar el libro ${response.bookId}: ${errorData.detail || 'Error desconocido'}`;
+        });
+        alert(`Error al eliminar algunos libros: ${errorMessages.join('\n')}`);
+      }
+
+      // Re-fetch books to update the UI
+      fetchBooks();
+      resetModal();
+      setSelectionMode(false);
+      setSelectedBooks(new Set());
+      
     } catch (err) {
       alert('Error de conexión al intentar eliminar los libros.');
     }
@@ -253,6 +298,18 @@ function LibraryView() {
   // Validar que books sea un array antes de renderizar
   const safeBooks = Array.isArray(books) ? books : [];
   const booksLength = safeBooks.length;
+
+  // Función para manejar la sincronización completada
+  const handleSyncComplete = useCallback((bookId, result) => {
+    // Actualizar el libro en el estado local
+    setBooks(prevBooks => 
+      prevBooks.map(book => 
+        book.id === bookId 
+          ? { ...book, synced_to_drive: true, source: 'hybrid' }
+          : book
+      )
+    );
+  }, []);
 
   return (
     <div className="library-container">
@@ -326,25 +383,29 @@ function LibraryView() {
               alt={`Portada de ${book.title}`}
               title={book.title}
             />
-            <div className="book-card-info">
-              <h3>{book.title}</h3>
-              <p>{book.author}</p>
-              <span>{book.category}</span>
+            <div className="book-info">
+              <h3 className="book-title">{book.title}</h3>
+              <p className="book-author">{book.author}</p>
+              <div className="book-category">
+                <span>{book.category}</span>
+              </div>
+              <LocationIndicator book={book} />
+              <SyncToDriveButton book={book} onSyncComplete={handleSyncComplete} />
+              {book.file_path && book.file_path.toLowerCase().endsWith('.pdf') ? (
+                <a 
+                  href={`http://localhost:8001/books/download/${book.id}`}
+                  className="download-link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  📄 Ver PDF
+                </a>
+              ) : (
+                <Link to={`/leer/${book.id}`} className="read-link">
+                  📖 Leer
+                </Link>
+              )}
             </div>
-            {book.file_path && book.file_path.toLowerCase().endsWith('.pdf') ? (
-              <a 
-                href={`http://localhost:8001/books/download/${book.id}`} 
-                className="download-button" 
-                target="_blank" 
-                rel="noopener noreferrer"
-              >
-                Leer PDF
-              </a>
-            ) : (
-              <Link to={`/leer/${book.id}`} className="download-button">
-                Leer PDF
-              </Link>
-            )}
           </div>
         ))}
       </div>

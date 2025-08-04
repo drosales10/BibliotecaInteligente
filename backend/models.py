@@ -18,3 +18,6 @@ class Book(Base):
     
     # Campo opcional para ruta local temporal (solo durante procesamiento)
     file_path = Column(String, nullable=True) # Ruta temporal local (opcional)
+    
+    # Campo para indicar si el libro está sincronizado con Google Drive
+    synced_to_drive = Column(Boolean, default=False) # Indica si el libro está sincronizado con Drive

@@ -1664,6 +1664,60 @@ def get_drive_categories():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener categorías de Drive: {str(e)}")
 
+@app.post("/drive/sync-book")
+def sync_book_to_drive(book_data: dict, db: Session = Depends(get_db)):
+    """
+    Sincroniza un libro desde local a Google Drive
+    """
+    try:
+        from google_drive_manager import drive_manager
+        
+        if not drive_manager.service:
+            raise HTTPException(status_code=503, detail="Google Drive no está configurado")
+        
+        book_id = book_data.get('book_id')
+        title = book_data.get('title')
+        author = book_data.get('author')
+        category = book_data.get('category')
+        
+        if not all([book_id, title, author, category]):
+            raise HTTPException(status_code=400, detail="Faltan datos requeridos para la sincronización")
+        
+        # Obtener el libro de la base de datos local
+        book = crud.get_book(db, book_id=book_id)
+        if not book:
+            raise HTTPException(status_code=404, detail="Libro no encontrado en la base de datos local")
+        
+        # Verificar si el archivo existe
+        if not book.file_path or not os.path.exists(book.file_path):
+            raise HTTPException(status_code=404, detail="Archivo del libro no encontrado")
+        
+        # Subir a Google Drive
+        result = drive_manager.upload_book_to_drive(
+            book.file_path,
+            title,
+            author,
+            category
+        )
+        
+        if result['success']:
+            # Actualizar el libro en la base de datos para marcar que está sincronizado
+            crud.update_book_sync_status(db, book_id=book_id, synced_to_drive=True, drive_file_id=result['file_id'])
+            
+            return {
+                "success": True,
+                "message": "Libro sincronizado exitosamente a Google Drive",
+                "drive_file_id": result['file_id'],
+                "drive_file_path": result['file_path']
+            }
+        else:
+            raise HTTPException(status_code=500, detail=f"Error al subir a Drive: {result['error']}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al sincronizar libro: {str(e)}")
+
 @app.get("/drive/status")
 def check_drive_status():
     """

@@ -1,0 +1,78 @@
+.sync-to-drive-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background-color: #1e3a8a;
+  color: #60a5fa;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+.sync-to-drive-btn:hover:not(:disabled) {
+  background-color: #1e40af;
+  color: #93c5fd;
+  transform: translateY(-1px);
+}
+
+.sync-to-drive-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sync-to-drive-btn.syncing {
+  background-color: #7c3aed;
+  color: #c4b5fd;
+  animation: pulse 1.5s infinite;
+}
+
+.sync-to-drive-btn.success {
+  background-color: #059669;
+  color: #6ee7b7;
+}
+
+.sync-to-drive-btn.error {
+  background-color: #dc2626;
+  color: #fca5a5;
+}
+
+.sync-icon {
+  font-size: 0.9rem;
+}
+
+.sync-text {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .sync-to-drive-btn {
+    padding: 4px 8px;
+    font-size: 0.7rem;
+  }
+  
+  .sync-icon {
+    font-size: 0.8rem;
+  }
+  
+  .sync-text {
+    font-size: 0.7rem;
+  }
+} 
