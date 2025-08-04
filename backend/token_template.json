@@ -1,0 +1,8 @@
+{
+  "token": "TU_ACCESS_TOKEN_AQUI",
+  "refresh_token": "TU_REFRESH_TOKEN_AQUI",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "client_id": "TU_CLIENT_ID_AQUI.apps.googleusercontent.com",
+  "client_secret": "TU_CLIENT_SECRET_AQUI",
+  "scopes": ["https://www.googleapis.com/auth/drive.file"]
+} 
