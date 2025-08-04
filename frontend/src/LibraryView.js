@@ -333,7 +333,7 @@ function LibraryView() {
       // Si está en Drive (incluyendo libros sincronizados), intentar desde Drive
       if (book.source === 'drive' || book.synced_to_drive) {
         // Descargar desde Google Drive
-        const response = await fetch(`/api/drive/books/${book.id}/content`);
+        const response = await fetch(`http://localhost:8001/api/drive/books/${book.id}/content`);
         if (response.ok) {
           const result = await response.json();
           if (result.file_path) {
