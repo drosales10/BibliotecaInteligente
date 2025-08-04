@@ -338,11 +338,11 @@ function LibraryView() {
                 target="_blank" 
                 rel="noopener noreferrer"
               >
-                Abrir PDF
+                Leer PDF
               </a>
             ) : (
               <Link to={`/leer/${book.id}`} className="download-button">
-                Leer EPUB
+                Leer PDF
               </Link>
             )}
           </div>

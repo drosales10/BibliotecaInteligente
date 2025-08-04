@@ -30,3 +30,8 @@ __pycache__/
 # Archivos del sistema operativo
 .DS_Store
 Thumbs.db
+/backend/temp*
+
+# Archivos de Google OAuth (información sensible)
+/backend/credentials.json
+/backend/token.json
