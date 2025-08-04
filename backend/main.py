@@ -456,11 +456,11 @@ async def upload_book(db: Session = Depends(get_db), book_file: UploadFile = Fil
             except OSError:
                 pass  # Ignorar errores de limpieza
 
-@app.get("/books/", response_model=List[schemas.Book])
+@app.get("/api/books/", response_model=List[schemas.Book])
 def read_books(category: str | None = None, search: str | None = None, db: Session = Depends(get_db)):
     return crud.get_books(db, category=category, search=search)
 
-@app.get("/categories/", response_model=List[str])
+@app.get("/api/categories/", response_model=List[str])
 def read_categories(db: Session = Depends(get_db)):
     return crud.get_categories(db)
 
@@ -500,7 +500,7 @@ def delete_multiple_books(book_ids: dict, db: Session = Depends(get_db)):
     
     return result
 
-@app.delete("/books/{book_id}")
+@app.delete("/api/books/{book_id}")
 def delete_single_book(book_id: int, db: Session = Depends(get_db)):
     try:
         book = crud.delete_book(db, book_id=book_id)
@@ -520,7 +520,7 @@ def delete_category_and_books(category_name: str, db: Session = Depends(get_db))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
-@app.get("/books/download/{book_id}")
+@app.get("/api/books/download/{book_id}")
 def download_book(book_id: int, db: Session = Depends(get_db)):
     """
     Descarga un libro desde Google Drive
@@ -1457,7 +1457,7 @@ def test_duplicate_detection(db: Session = Depends(get_db)):
 
 
 
-@app.get("/drive/books/")
+@app.get("/api/drive/books/")
 def get_drive_books(category: str | None = None, search: str | None = None):
     """
     Obtiene libros desde Google Drive
@@ -1506,7 +1506,7 @@ def get_drive_books(category: str | None = None, search: str | None = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener libros de Drive: {str(e)}")
 
-@app.post("/drive/books/upload")
+@app.post("/api/drive/books/upload")
 async def upload_book_to_drive(book_file: UploadFile = File(...)):
     """
     Sube un libro a Google Drive
@@ -1572,7 +1572,7 @@ async def upload_book_to_drive(book_file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al subir libro a Drive: {str(e)}")
 
-@app.delete("/drive/books/{book_id}")
+@app.delete("/api/drive/books/{book_id}")
 def delete_book_from_drive(book_id: str):
     """
     Elimina un libro de Google Drive
@@ -1595,7 +1595,7 @@ def delete_book_from_drive(book_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al eliminar libro de Drive: {str(e)}")
 
-@app.get("/drive/books/{book_id}/content")
+@app.get("/api/drive/books/{book_id}/content")
 def get_drive_book_content(book_id: str):
     """
     Obtiene el contenido de un libro desde Google Drive
@@ -1641,7 +1641,7 @@ def get_drive_book_content(book_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener contenido del libro: {str(e)}")
 
-@app.get("/drive/categories/")
+@app.get("/api/drive/categories/")
 def get_drive_categories():
     """
     Obtiene las categorías disponibles en Google Drive
@@ -1664,7 +1664,7 @@ def get_drive_categories():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener categorías de Drive: {str(e)}")
 
-@app.post("/drive/sync-book")
+@app.post("/api/drive/sync-book")
 def sync_book_to_drive(book_data: dict, db: Session = Depends(get_db)):
     """
     Sincroniza un libro desde local a Google Drive y elimina el archivo local
@@ -1739,7 +1739,7 @@ def sync_book_to_drive(book_data: dict, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al sincronizar libro: {str(e)}")
 
-@app.get("/drive/status")
+@app.get("/api/drive/status")
 def check_drive_status():
     """
     Verifica el estado de Google Drive
