@@ -11,7 +11,7 @@
 .header-logo {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   align-items: flex-start;
 }
 
@@ -19,6 +19,13 @@
   margin: 0;
   font-size: 1.5rem;
   color: #61dafb;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .header-nav {
@@ -42,4 +49,31 @@
 .nav-link.active {
   color: #61dafb;
   border-bottom-color: #61dafb;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .app-header {
+    flex-direction: column;
+    gap: 15px;
+    padding: 15px 20px;
+  }
+  
+  .header-logo {
+    align-items: center;
+    text-align: center;
+  }
+  
+  .header-controls {
+    justify-content: center;
+    gap: 12px;
+  }
+  
+  .header-nav {
+    gap: 20px;
+  }
+  
+  .nav-link {
+    font-size: 1rem;
+  }
 }
