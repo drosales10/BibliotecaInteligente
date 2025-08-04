@@ -3,6 +3,7 @@ import { useSearchParams, Link, useLocation } from 'react-router-dom';
 import { useBookService } from './hooks/useBookService';
 import { useAppMode } from './contexts/AppModeContext';
 import SyncToDriveButton from './components/SyncToDriveButton';
+import BulkSyncToDriveButton from './components/BulkSyncToDriveButton';
 import './LibraryView.css';
 
 // Hook personalizado para debounce
@@ -361,6 +362,7 @@ function LibraryView() {
       <div className="library-header">
         <h2>Mi Biblioteca</h2>
         <div className="library-actions">
+          <BulkSyncToDriveButton books={safeBooks} onSyncComplete={handleSyncComplete} />
           <button 
             className={`selection-mode-btn ${selectionMode ? 'active' : ''}`}
             onClick={toggleSelectionMode}
@@ -435,7 +437,6 @@ function LibraryView() {
                 <span>{book.category}</span>
               </div>
               <LocationIndicator book={book} />
-              <SyncToDriveButton book={book} onSyncComplete={handleSyncComplete} />
               {book.file_path && book.file_path.toLowerCase().endsWith('.pdf') ? (
                 <button 
                   onClick={() => handleViewPDF(book)}
