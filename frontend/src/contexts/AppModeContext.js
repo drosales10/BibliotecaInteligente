@@ -12,17 +12,25 @@ export const useAppMode = () => {
 
 export const AppModeProvider = ({ children }) => {
   const [appMode, setAppMode] = useState('local');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // Cambiar a false por defecto
 
   useEffect(() => {
-    const savedMode = localStorage.getItem('appMode') || 'local';
-    setAppMode(savedMode);
-    setIsLoading(false);
+    try {
+      const savedMode = localStorage.getItem('appMode') || 'local';
+      setAppMode(savedMode);
+    } catch (error) {
+      console.error('Error al cargar modo de aplicación:', error);
+      setAppMode('local');
+    }
   }, []);
 
   const changeAppMode = (newMode) => {
-    setAppMode(newMode);
-    localStorage.setItem('appMode', newMode);
+    try {
+      setAppMode(newMode);
+      localStorage.setItem('appMode', newMode);
+    } catch (error) {
+      console.error('Error al cambiar modo de aplicación:', error);
+    }
   };
 
   const value = {
