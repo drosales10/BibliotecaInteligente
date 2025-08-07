@@ -1,12 +1,23 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import DriveStatusIndicator from './components/DriveStatusIndicator';
+import DriveStatusModal from './components/DriveStatusModal';
 import ModeSelector from './components/ModeSelector';
+import DarkModeToggle from './components/DarkModeToggle';
 import { useAppMode } from './contexts/AppModeContext';
+import { useDriveStatus } from './hooks/useDriveStatus';
 import './Header.css';
 
 function Header() {
   const { appMode, changeAppMode } = useAppMode();
+  const { 
+    driveStatus, 
+    loading, 
+    error, 
+    refreshStatus, 
+    clearDriveCache, 
+    isCacheValid, 
+    retryCount 
+  } = useDriveStatus();
 
   return (
     <header className="app-header">
@@ -17,7 +28,18 @@ function Header() {
             currentMode={appMode}
             onModeChange={changeAppMode}
           />
-          {appMode === 'drive' && <DriveStatusIndicator />}
+          <DarkModeToggle size="medium" />
+          {appMode === 'drive' && (
+            <DriveStatusModal 
+              driveStatus={driveStatus}
+              loading={loading}
+              error={error}
+              refreshStatus={refreshStatus}
+              clearDriveCache={clearDriveCache}
+              isCacheValid={isCacheValid}
+              retryCount={retryCount}
+            />
+          )}
         </div>
       </div>
       <nav className="header-nav">
@@ -27,10 +49,10 @@ function Header() {
         <NavLink to="/upload" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
           Añadir Libro
         </NavLink>
-        <NavLink to="/etiquetas" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+        <NavLink to="/categories" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
           Etiquetas
         </NavLink>
-        <NavLink to="/herramientas" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+        <NavLink to="/tools" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
           Herramientas
         </NavLink>
       </nav>

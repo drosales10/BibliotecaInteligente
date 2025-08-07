@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { ReactReader } from 'react-reader';
+import { useBookService } from './hooks/useBookService';
 import './ReaderView.css';
 
 function ReaderView() {
@@ -11,43 +12,44 @@ function ReaderView() {
   const [fileType, setFileType] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const { getBookContent } = useBookService();
 
   useEffect(() => {
     const fetchBookData = async () => {
       setIsLoading(true);
       setError('');
       try {
-        const response = await fetch(`http://localhost:8001/books/download/${bookId}`);
-        if (!response.ok) {
-          throw new Error('No se pudo obtener el libro desde el servidor.');
-        }
+        const response = await getBookContent(bookId);
         
-        // Detectar el tipo de archivo basándose en el Content-Type
-        const contentType = response.headers.get('content-type');
-        
-        if (contentType && contentType.includes('application/pdf')) {
-          // Es un PDF - crear URL para el visor
-          const blob = await response.blob();
-          const url = URL.createObjectURL(blob);
-          setPdfUrl(url);
-          setFileType('pdf');
-        } else if (contentType && contentType.includes('application/epub+zip')) {
-          // Es un EPUB - usar ReactReader
-          const data = await response.arrayBuffer();
-          setEpubData(data);
-          setFileType('epub');
+        // getBookContent siempre devuelve un blob para archivos locales
+        if (response instanceof Blob) {
+          const contentType = response.type;
+          
+          if (contentType && contentType.includes('application/pdf')) {
+            // Es un PDF - crear URL para el visor
+            const url = URL.createObjectURL(response);
+            setPdfUrl(url);
+            setFileType('pdf');
+          } else if (contentType && contentType.includes('application/epub+zip')) {
+            // Es un EPUB - usar ReactReader
+            const data = await response.arrayBuffer();
+            setEpubData(data);
+            setFileType('epub');
+          } else {
+            // Tipo desconocido - intentar descargar
+            const url = URL.createObjectURL(response);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `libro_${bookId}`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            setError("Archivo descargado. No se puede previsualizar este tipo de archivo.");
+          }
         } else {
-          // Tipo desconocido - intentar descargar
-          const blob = await response.blob();
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `libro_${bookId}`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          setError("Archivo descargado. No se puede previsualizar este tipo de archivo.");
+          // Para libros de Drive, puede devolver JSON
+          setError("No se pudo cargar el libro.");
         }
       } catch (err) {
         console.error("Error al obtener los datos del libro:", err);

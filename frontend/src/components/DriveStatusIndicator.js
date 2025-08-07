@@ -1,85 +1,172 @@
 import React from 'react';
-import { useDriveStatus } from '../hooks/useDriveStatus';
 import './DriveStatusIndicator.css';
 
-const DriveStatusIndicator = () => {
-  const { driveStatus, loading, refreshStatus } = useDriveStatus();
-
+const DriveStatusIndicator = ({ driveStatus, loading, error, refreshStatus, clearDriveCache, isCacheValid, retryCount }) => {
   const getStatusIcon = () => {
+    if (loading) return '🔄';
     switch (driveStatus.status) {
       case 'ok':
-        return '☁️';
-      case 'not_configured':
-        return '⚠️';
+        return '✅';
       case 'error':
+      case 'connection_error':
         return '❌';
+      case 'timeout':
+        return '⏰';
+      case 'not_configured':
+        return '⚙️';
+      case 'partial':
+        return '⚠️';
       default:
-        return '⏳';
+        return '❓';
     }
   };
 
-  const getStatusClass = () => {
+  const getStatusColor = () => {
     switch (driveStatus.status) {
       case 'ok':
-        return 'drive-status-ok';
-      case 'not_configured':
-        return 'drive-status-warning';
+        return 'status-ok';
       case 'error':
-        return 'drive-status-error';
+      case 'connection_error':
+        return 'status-error';
+      case 'timeout':
+        return 'status-timeout';
+      case 'not_configured':
+        return 'status-warning';
+      case 'partial':
+        return 'status-partial';
       default:
-        return 'drive-status-loading';
+        return 'status-unknown';
     }
   };
 
-  const formatStorageSize = (bytes) => {
-    if (!bytes) return '0 MB';
-    const mb = bytes / (1024 * 1024);
-    const gb = mb / 1024;
-    if (gb >= 1) {
-      return `${gb.toFixed(2)} GB`;
-    }
-    return `${mb.toFixed(2)} MB`;
+  const getStatusText = () => {
+    if (loading) return 'Verificando conexión...';
+    return driveStatus.message || 'Estado desconocido';
   };
 
-  if (loading) {
+  const formatStorageInfo = (storageInfo) => {
+    if (!storageInfo) return null;
+    
+    const { total_size_mb, total_size_gb, root_folder_name } = storageInfo;
     return (
-      <div className="drive-status-indicator drive-status-loading">
-        <span className="drive-icon">⏳</span>
-        <span className="drive-text">Verificando Google Drive...</span>
+      <div className="storage-info">
+        <div className="storage-item">
+          <span className="storage-label">Carpeta:</span>
+          <span className="storage-value">{root_folder_name}</span>
+        </div>
+        <div className="storage-item">
+          <span className="storage-label">Tamaño:</span>
+          <span className="storage-value">
+            {total_size_mb > 1024 ? `${total_size_gb} GB` : `${total_size_mb} MB`}
+          </span>
+        </div>
       </div>
     );
-  }
+  };
+
+  const formatHealthCheck = (healthCheck) => {
+    if (!healthCheck) return null;
+    
+    return (
+      <div className="health-info">
+        <div className="health-item">
+          <span className="health-label">Estado:</span>
+          <span className={`health-value ${healthCheck.status === 'healthy' ? 'healthy' : 'unhealthy'}`}>
+            {healthCheck.status === 'healthy' ? 'Saludable' : 'Problema'}
+          </span>
+        </div>
+        {healthCheck.test_successful !== undefined && (
+          <div className="health-item">
+            <span className="health-label">Prueba:</span>
+            <span className={`health-value ${healthCheck.test_successful ? 'success' : 'failed'}`}>
+              {healthCheck.test_successful ? 'Exitosa' : 'Fallida'}
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const handleRefresh = () => {
+    refreshStatus();
+  };
+
+  const handleClearCache = async () => {
+    const result = await clearDriveCache();
+    if (result.success) {
+      console.log('Caché limpiado exitosamente');
+    } else {
+      console.error('Error al limpiar caché:', result.message);
+    }
+  };
 
   return (
-    <div className={`drive-status-indicator ${getStatusClass()}`}>
-      <span className="drive-icon">{getStatusIcon()}</span>
-      <div className="drive-info">
-        <span className="drive-text">
-          {driveStatus.status === 'ok' ? 'Google Drive' : driveStatus.message}
+    <div className={`drive-status-indicator ${getStatusColor()}`}>
+      <div className="status-header">
+        <span className="status-icon">{getStatusIcon()}</span>
+        <span className="status-text">{getStatusText()}</span>
+        <div className="status-actions">
+          <button 
+            onClick={handleRefresh} 
+            disabled={loading}
+            className="refresh-button"
+            title="Actualizar estado"
+          >
+            🔄
+          </button>
+          <button 
+            onClick={handleClearCache} 
+            disabled={loading}
+            className="clear-cache-button"
+            title="Limpiar caché"
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+      
+      {error && (
+        <div className="error-message">
+          <span className="error-icon">⚠️</span>
+          <span className="error-text">{error}</span>
+          {retryCount > 0 && (
+            <span className="retry-info">
+              (Reintento {retryCount}/3)
+            </span>
+          )}
+        </div>
+      )}
+      
+      {driveStatus.storageInfo && (
+        <div className="status-details">
+          {formatStorageInfo(driveStatus.storageInfo)}
+        </div>
+      )}
+      
+      {driveStatus.healthCheck && (
+        <div className="status-details">
+          {formatHealthCheck(driveStatus.healthCheck)}
+        </div>
+      )}
+      
+      <div className="cache-info">
+        <span className="cache-label">Caché:</span>
+        <span className={`cache-status ${isCacheValid ? 'valid' : 'invalid'}`}>
+          {isCacheValid ? 'Válido' : 'Expirado'}
         </span>
-        {driveStatus.storageInfo && (
-          <span className="drive-storage">
-            {formatStorageSize(driveStatus.storageInfo.total_size_bytes)}
+        {driveStatus.timestamp && (
+          <span className="cache-timestamp">
+            ({new Date(driveStatus.timestamp).toLocaleTimeString()})
           </span>
         )}
       </div>
-      {driveStatus.setupRequired && (
-        <button 
-          className="drive-setup-btn"
-          onClick={() => {
-            alert('Para configurar Google Drive, sigue las instrucciones en la documentación del backend.');
-          }}
-        >
-          Configurar
-        </button>
+      
+      {loading && (
+        <div className="loading-indicator">
+          <div className="loading-spinner"></div>
+          <span>Verificando conexión...</span>
+        </div>
       )}
-      <button 
-        className="drive-refresh-btn"
-        onClick={refreshStatus}
-        title="Actualizar estado"
-      >
-        🔄
-      </button>
     </div>
   );
 };

@@ -1,0 +1,473 @@
+.modern-card {
+  background-color: var(--bg-elevated);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-light);
+  overflow: hidden;
+  transition: all var(--transition-normal);
+  position: relative;
+}
+
+/* Efecto de brillo en hover */
+.modern-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+  transition: left var(--transition-slow);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.modern-card--hoverable:hover::before {
+  left: 100%;
+}
+
+/* Variantes */
+.modern-card--default {
+  background-color: var(--bg-elevated);
+}
+
+.modern-card--elevated {
+  background-color: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+}
+
+.modern-card--outlined {
+  background-color: transparent;
+  border: 2px solid var(--border-medium);
+  box-shadow: none;
+}
+
+.modern-card--outlined:hover {
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.modern-card--glass {
+  background-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dark-mode .modern-card--glass {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Tamaños */
+.modern-card--small {
+  padding: var(--space-4);
+}
+
+.modern-card--medium {
+  padding: var(--space-6);
+}
+
+.modern-card--large {
+  padding: var(--space-8);
+}
+
+/* Estados interactivos */
+.modern-card--hoverable:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-xl);
+}
+
+.modern-card--interactive {
+  cursor: pointer;
+  user-select: none;
+}
+
+.modern-card--interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.modern-card--interactive:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-md);
+}
+
+.modern-card--interactive:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Componentes internos */
+.modern-card__header {
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--border-light);
+  background-color: var(--bg-secondary);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.modern-card__body {
+  padding: var(--space-6);
+  color: var(--text-primary);
+}
+
+.modern-card__footer {
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--border-light);
+  background-color: var(--bg-secondary);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.modern-card__image {
+  width: 100%;
+  height: 200px;
+  overflow: hidden;
+  position: relative;
+}
+
+.modern-card__image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--transition-normal);
+}
+
+.modern-card--hoverable:hover .modern-card__image img {
+  transform: scale(1.05);
+}
+
+.modern-card__title {
+  margin: 0 0 var(--space-2) 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.modern-card__subtitle {
+  margin: 0 0 var(--space-4) 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.modern-card__content {
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.modern-card__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Tarjetas sin padding interno */
+.modern-card--no-padding {
+  padding: 0;
+}
+
+.modern-card--no-padding .modern-card__body {
+  padding: 0;
+}
+
+/* Tarjetas con imagen de fondo */
+.modern-card--with-bg-image {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  color: var(--text-inverse);
+  position: relative;
+}
+
+.modern-card--with-bg-image::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.3),
+    rgba(0, 0, 0, 0.7)
+  );
+  z-index: 0;
+}
+
+.modern-card--with-bg-image > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Tarjetas de estadísticas */
+.modern-card--stats {
+  text-align: center;
+  padding: var(--space-8);
+}
+
+.modern-card--stats .modern-card__title {
+  font-size: 2.5rem;
+  font-weight: 800;
+  margin-bottom: var(--space-2);
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.modern-card--stats .modern-card__subtitle {
+  font-size: 1rem;
+  font-weight: 500;
+  margin-bottom: var(--space-4);
+}
+
+/* Tarjetas de perfil */
+.modern-card--profile {
+  text-align: center;
+  padding: var(--space-8);
+}
+
+.modern-card--profile .modern-card__image {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  margin: 0 auto var(--space-6) auto;
+  border: 4px solid var(--primary-color);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Animaciones */
+@keyframes cardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modern-card {
+  animation: cardFadeIn var(--transition-slow) ease-out;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .modern-card--large {
+    padding: var(--space-6);
+  }
+  
+  .modern-card--medium {
+    padding: var(--space-4);
+  }
+  
+  .modern-card--small {
+    padding: var(--space-3);
+  }
+  
+  .modern-card__header,
+  .modern-card__footer {
+    padding: var(--space-3) var(--space-4);
+  }
+  
+  .modern-card__body {
+    padding: var(--space-4);
+  }
+  
+  .modern-card--stats .modern-card__title {
+    font-size: 2rem;
+  }
+  
+  .modern-card--profile .modern-card__image {
+    width: 100px;
+    height: 100px;
+  }
+}
+
+@media (max-width: 480px) {
+  .modern-card--large {
+    padding: var(--space-4);
+  }
+  
+  .modern-card--medium {
+    padding: var(--space-3);
+  }
+  
+  .modern-card--small {
+    padding: var(--space-2);
+  }
+  
+  .modern-card__header,
+  .modern-card__footer {
+    padding: var(--space-2) var(--space-3);
+  }
+  
+  .modern-card__body {
+    padding: var(--space-3);
+  }
+  
+  .modern-card--stats {
+    padding: var(--space-6);
+  }
+  
+  .modern-card--stats .modern-card__title {
+    font-size: 1.75rem;
+  }
+  
+  .modern-card--profile {
+    padding: var(--space-6);
+  }
+  
+  .modern-card--profile .modern-card__image {
+    width: 80px;
+    height: 80px;
+  }
+}
+
+/* Mejoras para accesibilidad */
+@media (prefers-reduced-motion: reduce) {
+  .modern-card {
+    animation: none;
+    transition: none;
+  }
+  
+  .modern-card::before {
+    display: none;
+  }
+  
+  .modern-card--hoverable:hover,
+  .modern-card--interactive:hover {
+    transform: none;
+  }
+  
+  .modern-card__image img {
+    transition: none;
+  }
+  
+  .modern-card--hoverable:hover .modern-card__image img {
+    transform: none;
+  }
+}
+
+/* Mejoras para contraste alto */
+@media (prefers-contrast: high) {
+  .modern-card {
+    border-width: 2px;
+  }
+  
+  .modern-card--outlined {
+    border-width: 3px;
+  }
+  
+  .modern-card__header,
+  .modern-card__footer {
+    border-width: 2px;
+  }
+}
+
+/* Mejoras para modo oscuro específico */
+.dark-mode .modern-card {
+  background-color: var(--bg-elevated);
+  border-color: var(--border-medium);
+}
+
+.dark-mode .modern-card--glass {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .modern-card__header,
+.dark-mode .modern-card__footer {
+  background-color: var(--bg-tertiary);
+  border-color: var(--border-medium);
+}
+
+/* Estados de carga */
+.modern-card--loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.modern-card--loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Grupos de tarjetas */
+.modern-card-grid {
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.modern-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Tarjetas con badges */
+.modern-card__badge {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  background: var(--primary-color);
+  color: var(--text-inverse);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-xl);
+  font-size: 0.75rem;
+  font-weight: 600;
+  z-index: 2;
+}
+
+.modern-card__badge--success {
+  background: var(--success-color);
+}
+
+.modern-card__badge--warning {
+  background: var(--warning-color);
+}
+
+.modern-card__badge--error {
+  background: var(--error-color);
+}
+
+/* Tarjetas con overlay */
+.modern-card__overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+  z-index: 3;
+}
+
+.modern-card--hoverable:hover .modern-card__overlay {
+  opacity: 1;
+} 

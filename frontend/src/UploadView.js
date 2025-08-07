@@ -1,6 +1,8 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDriveStatus } from './hooks/useDriveStatus';
+import { useBookService } from './hooks/useBookService';
+import { useAppMode } from './contexts/AppModeContext';
 import './UploadView.css';
 
 function UploadView() {
@@ -13,6 +15,19 @@ function UploadView() {
   const [progress, setProgress] = useState(null);
   const navigate = useNavigate();
   const { driveStatus } = useDriveStatus();
+  const { uploadBook } = useBookService();
+  const { appMode } = useAppMode();
+
+  // Logging para debugging - solo una vez al montar el componente
+  useEffect(() => {
+    console.log('🔍 UploadView montado con appMode:', appMode);
+    console.log('🔍 showDirectoryPicker disponible:', 'showDirectoryPicker' in window);
+  }, [appMode]);
+
+  // Logging cuando cambia el modo de upload
+  useEffect(() => {
+    console.log('🔍 uploadMode cambiado a:', uploadMode);
+  }, [uploadMode]);
 
   const handleFileChange = (event) => {
     setSelectedFile(event.target.files[0]);
@@ -25,41 +40,69 @@ function UploadView() {
   };
 
   const handleFolderSelect = async () => {
+    console.log('🔍 handleFolderSelect llamado');
+    console.log('🔍 appMode actual:', appMode);
+    
     try {
       // Verificar si el navegador soporta la API de directorios
       if (!('showDirectoryPicker' in window)) {
-        setMessage('Tu navegador no soporta la selección de carpetas. Usa la opción de archivo ZIP.');
+        console.log('❌ showDirectoryPicker no está disponible en este navegador');
+        setMessage('❌ Tu navegador no soporta la selección de carpetas. Usa la opción de archivo ZIP.');
         return;
       }
 
+      console.log('🔍 Iniciando selección de carpeta...');
+      console.log('🔍 Llamando a window.showDirectoryPicker()...');
+      
       const dirHandle = await window.showDirectoryPicker();
+      console.log('✅ Carpeta seleccionada:', dirHandle.name);
+      
       setSelectedFolder(dirHandle);
-      setMessage(`Carpeta seleccionada: ${dirHandle.name}`);
+      setMessage(`✅ Carpeta seleccionada: ${dirHandle.name}`);
     } catch (error) {
-      console.error('Error al seleccionar carpeta:', error);
-      setMessage('Error al seleccionar la carpeta. Usa la opción de archivo ZIP.');
+      console.error('❌ Error al seleccionar carpeta:', error);
+      if (error.name === 'AbortError') {
+        setMessage('❌ Selección de carpeta cancelada por el usuario.');
+      } else {
+        setMessage('❌ Error al seleccionar la carpeta. Usa la opción de archivo ZIP.');
+      }
     }
   };
 
   const processFolderFiles = async (dirHandle) => {
     const files = [];
+    console.log('🔍 Iniciando procesamiento de archivos de carpeta:', dirHandle.name);
     
-    const collectFiles = async (handle) => {
-      for await (const entry of handle.values()) {
-        if (entry.kind === 'file') {
-          const file = await entry.getFile();
-          if (file.name.toLowerCase().endsWith('.pdf') || 
-              file.name.toLowerCase().endsWith('.epub') ||
-              file.name.toLowerCase().endsWith('.zip')) {
-            files.push(file);
+    const collectFiles = async (handle, depth = 0) => {
+      const indent = '  '.repeat(depth);
+      console.log(`${indent}📁 Explorando: ${handle.name}`);
+      
+      try {
+        for await (const entry of handle.values()) {
+          if (entry.kind === 'file') {
+            const file = await entry.getFile();
+            console.log(`${indent}📄 Archivo encontrado: ${file.name} (${file.size} bytes)`);
+            
+            // Solo incluir archivos PDF y EPUB
+            if (file.name.toLowerCase().endsWith('.pdf') || 
+                file.name.toLowerCase().endsWith('.epub')) {
+              files.push(file);
+              console.log(`${indent}✅ Archivo válido agregado: ${file.name}`);
+            } else {
+              console.log(`${indent}❌ Archivo ignorado (no es PDF/EPUB): ${file.name}`);
+            }
+          } else if (entry.kind === 'directory') {
+            console.log(`${indent}📁 Subdirectorio encontrado: ${entry.name}`);
+            await collectFiles(entry, depth + 1);
           }
-        } else if (entry.kind === 'directory') {
-          await collectFiles(entry);
         }
+      } catch (error) {
+        console.error(`${indent}❌ Error explorando ${handle.name}:`, error);
       }
     };
     
     await collectFiles(dirHandle);
+    console.log(`✅ Total de archivos válidos encontrados: ${files.length}`);
     return files;
   };
 
@@ -94,35 +137,23 @@ function UploadView() {
       setMessage('⚠️ Google Drive no está configurado correctamente. Los libros se almacenarán localmente.');
     }
     
-    const formData = new FormData();
-    formData.append('book_file', selectedFile);
     setIsLoading(true);
     setMessage('Analizando libro con IA... Esto puede tardar un momento.');
 
     try {
-      const response = await fetch('http://localhost:8001/upload-book/', {
-        method: 'POST',
-        body: formData,
-      });
+      const result = await uploadBook(selectedFile);
       
-      const result = await response.json();
+      setMessage(`'${result.title}' ha sido añadido exitosamente en modo ${appMode === 'local' ? 'Local' : 'Drive'}. Redirigiendo a la biblioteca...`);
       
-      if (response.ok) {
-        setMessage(`'${result.title}' ha sido añadido exitosamente. Redirigiendo a la biblioteca...`);
-        
-        setSelectedFile(null);
-        setIsLoading(false);
-        
-        setTimeout(() => {
-          navigate('/', { replace: true });
-        }, 1500);
-      } else {
-        setMessage(`Error: ${result.detail || 'No se pudo procesar el archivo.'}`);
-        setIsLoading(false);
-      }
+      setSelectedFile(null);
+      setIsLoading(false);
+      
+      setTimeout(() => {
+        navigate('/', { replace: true });
+      }, 1500);
     } catch (error) {
       console.error('Error durante la carga:', error);
-      setMessage('Error de conexión: No se pudo conectar con el backend.');
+      setMessage(`Error: ${error.message || 'No se pudo procesar el archivo.'}`);
       setIsLoading(false);
     }
   };
@@ -139,35 +170,84 @@ function UploadView() {
     setProgress({ current: 0, total: 0, message: 'Iniciando procesamiento masivo...' });
 
     try {
-      const response = await fetch('http://localhost:8001/upload-bulk/', {
-        method: 'POST',
-        body: formData,
+      // Determinar el endpoint según el modo de la aplicación
+      const endpoint = appMode === 'local' 
+        ? 'http://localhost:8001/api/upload-bulk-local/'
+        : 'http://localhost:8001/upload-bulk/';
+      
+      setProgress({ current: 0, total: 0, message: `Procesando en modo ${appMode === 'local' ? 'local' : 'nube'}...` });
+      
+      // Verificar primero si el backend está disponible
+      setProgress({ current: 0, total: 0, message: 'Verificando conexión con el servidor...' });
+      
+      const healthCheck = await fetch('http://localhost:8001/api/drive/status', {
+        method: 'GET',
+        headers: { 'Origin': 'http://localhost:3000' },
+        signal: AbortSignal.timeout(10000) // 10 segundos timeout
       });
       
-      const result = await response.json();
+      if (!healthCheck.ok) {
+        throw new Error('El servidor no está respondiendo correctamente');
+      }
       
-      if (response.ok) {
+      setProgress({ current: 0, total: 0, message: 'Conexión establecida. Iniciando procesamiento...' });
+      
+      // Crear un AbortController para manejar timeouts
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minutos de timeout
+      
+      setProgress({ current: 0, total: 0, message: 'Subiendo archivo ZIP al servidor...' });
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+        headers: {
+          // No incluir Content-Type, dejar que el navegador lo establezca para FormData
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        
+        if (response.status === 503 && appMode !== 'local') {
+          throw new Error('Google Drive no está configurado correctamente. Verifica la configuración.');
+        } else if (response.status === 413) {
+          throw new Error('El archivo ZIP es demasiado grande. Intenta con un archivo más pequeño.');
+        } else {
+          throw new Error(`Error al procesar el archivo ZIP: ${response.status} ${response.statusText}`);
+        }
+      }
+      
+      setProgress({ current: 0, total: 0, message: 'Procesando archivos...' });
+      
+      const responseData = await response.json();
+      
+      if (responseData.successful > 0 || responseData.total_files > 0) {
         setProgress({
-          current: result.successful,
-          total: result.total_files,
-          message: result.message
+          current: responseData.successful,
+          total: responseData.total_files,
+          message: responseData.message
         });
         
         // Crear mensaje detallado con información sobre duplicados y optimización
-        let detailedMessage = `✅ ${result.message}`;
-        if (result.duplicates > 0) {
+        let detailedMessage = `✅ ${responseData.message}`;
+        if (responseData.duplicates > 0) {
           detailedMessage += `\n\n📋 Resumen:\n`;
-          detailedMessage += `• Libros procesados: ${result.successful}\n`;
-          detailedMessage += `• Errores: ${result.failed}\n`;
-          detailedMessage += `• Duplicados detectados: ${result.duplicates}`;
+          detailedMessage += `• Libros procesados: ${responseData.successful}\n`;
+          detailedMessage += `• Errores: ${responseData.failed}\n`;
+          detailedMessage += `• Duplicados detectados: ${responseData.duplicates}`;
         }
         
         // Agregar información de optimización si está disponible
-        if (result.optimization_stats) {
+        if (responseData.optimization_stats) {
           detailedMessage += `\n\n🚀 Optimización:\n`;
-          detailedMessage += `• Llamadas a IA ahorradas: ${result.optimization_stats.saved_ai_calls}\n`;
-          detailedMessage += `• Archivos únicos procesados: ${result.optimization_stats.unique_files}\n`;
-          detailedMessage += `• Duplicados detectados previamente: ${result.optimization_stats.duplicate_files}`;
+          detailedMessage += `• Llamadas a IA ahorradas: ${responseData.optimization_stats.saved_ai_calls}\n`;
+          detailedMessage += `• Archivos únicos procesados: ${responseData.optimization_stats.unique_files}\n`;
+          detailedMessage += `• Duplicados detectados previamente: ${responseData.optimization_stats.duplicate_files}`;
         }
         
         setMessage(detailedMessage);
@@ -178,13 +258,23 @@ function UploadView() {
           navigate('/', { replace: true });
         }, 5000); // Más tiempo para leer la información de duplicados
       } else {
-        setMessage(`Error: ${result.detail || 'No se pudo procesar el archivo ZIP.'}`);
+        setMessage(`Error: ${responseData.detail || 'No se pudo procesar el archivo ZIP.'}`);
         setIsLoading(false);
         setProgress(null);
       }
     } catch (error) {
       console.error('Error durante la carga masiva:', error);
-      setMessage('Error de conexión: No se pudo conectar con el backend.');
+      
+      if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+        setMessage('Error: La operación tardó demasiado tiempo. El archivo ZIP puede ser muy grande o el servidor está ocupado. Intenta con un archivo más pequeño.');
+      } else if (error.message.includes('Failed to fetch')) {
+        setMessage('Error de conexión: No se pudo conectar con el backend. Verifica que el servidor esté ejecutándose en http://localhost:8001');
+      } else if (error.message.includes('Google Drive no está configurado') && appMode !== 'local') {
+        setMessage('Error: Google Drive no está configurado correctamente. Verifica que el archivo credentials.json esté presente y configurado.');
+      } else {
+        setMessage(`Error: ${error.message}`);
+      }
+      
       setIsLoading(false);
       setProgress(null);
     }
@@ -192,25 +282,34 @@ function UploadView() {
 
   const handleFolderUpload = async () => {
     if (!selectedFolder) {
-      setMessage('Por favor, selecciona una carpeta primero.');
+      setMessage('❌ Por favor, selecciona una carpeta primero.');
+      return;
+    }
+
+    // Verificar que estamos en modo local
+    if (appMode !== 'local') {
+      setMessage('❌ La selección de carpeta solo está disponible en modo local. Cambia a modo local para usar esta función.');
       return;
     }
     
+    console.log('🚀 Iniciando carga de carpeta en modo local...');
     setIsLoading(true);
     setProgress({ current: 0, total: 0, message: 'Recopilando archivos de la carpeta...' });
 
     try {
       // Recopilar todos los archivos de la carpeta
+      console.log('📁 Recopilando archivos de la carpeta...');
       const files = await processFolderFiles(selectedFolder);
       
       if (files.length === 0) {
-        setMessage('No se encontraron archivos PDF, EPUB o ZIP en la carpeta seleccionada.');
+        setMessage('❌ No se encontraron archivos PDF o EPUB en la carpeta seleccionada.');
         setIsLoading(false);
         setProgress(null);
         return;
       }
 
-      setProgress({ current: 0, total: files.length, message: `Procesando ${files.length} archivos...` });
+      console.log(`📚 Archivos encontrados: ${files.length}`);
+      setProgress({ current: 0, total: files.length, message: `Procesando ${files.length} archivos en modo local...` });
 
       // Procesar archivos uno por uno (para evitar límites de tamaño)
       let successful = 0;
@@ -219,6 +318,8 @@ function UploadView() {
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        console.log(`📖 Procesando archivo ${i + 1}/${files.length}: ${file.name}`);
+        
         setProgress({ 
           current: i + 1, 
           total: files.length, 
@@ -226,33 +327,28 @@ function UploadView() {
         });
 
         try {
-          const formData = new FormData();
-          formData.append('book_file', file);
-
-          const response = await fetch('http://localhost:8001/upload-book/', {
-            method: 'POST',
-            body: formData,
-          });
+          console.log(`🔄 Enviando ${file.name} al backend...`);
+          const response = await uploadBook(file);
           
-          const result = await response.json();
-          
-          if (response.ok) {
+          if (response && response.success === false && response.isDuplicate) {
+            console.log(`⚠️ ${file.name} es un duplicado: ${response.detail}`);
+            duplicates++;
+          } else if (response && response.id) {
+            console.log(`✅ ${file.name} procesado exitosamente`);
             successful++;
           } else {
-            if (result.detail && result.detail.includes('duplicado')) {
-              duplicates++;
-            } else {
-              failed++;
-            }
+            console.log(`❌ Error procesando ${file.name}:`, response);
+            failed++;
           }
         } catch (error) {
-          console.error(`Error procesando ${file.name}:`, error);
+          console.error(`❌ Error procesando ${file.name}:`, error);
           failed++;
         }
       }
 
       const detailedMessage = `✅ Procesamiento completado.\n\n📋 Resumen:\n• Libros procesados: ${successful}\n• Errores: ${failed}\n• Duplicados detectados: ${duplicates}`;
       
+      console.log('🎉 Procesamiento de carpeta completado:', { successful, failed, duplicates });
       setMessage(detailedMessage);
       setSelectedFolder(null);
       setIsLoading(false);
@@ -262,8 +358,8 @@ function UploadView() {
         navigate('/', { replace: true });
       }, 5000);
     } catch (error) {
-      console.error('Error durante el procesamiento de carpeta:', error);
-      setMessage('Error de conexión: No se pudo conectar con el backend.');
+      console.error('❌ Error durante el procesamiento de carpeta:', error);
+      setMessage('❌ Error de conexión: No se pudo conectar con el backend.');
       setIsLoading(false);
       setProgress(null);
     }
@@ -369,8 +465,8 @@ function UploadView() {
       ) : (
         <div className="folder-upload-section">
           <p>
-            Selecciona una carpeta de tu computadora que contenga libros (PDF, EPUB y ZIP). 
-            La aplicación procesará todos los archivos de forma secuencial.
+            Selecciona una carpeta de tu computadora que contenga libros (PDF y EPUB). 
+            La aplicación procesará todos los archivos de forma secuencial en modo local.
           </p>
           <div className="upload-container">
             <div className="drop-zone">
@@ -382,6 +478,23 @@ function UploadView() {
               <button 
                 onClick={handleFolderSelect}
                 className="folder-select-button"
+                type="button"
+                style={{
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  marginTop: '10px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  zIndex: 1000,
+                  position: 'relative'
+                }}
               >
                 📁 Seleccionar Carpeta
               </button>
@@ -389,15 +502,15 @@ function UploadView() {
           </div>
           
           <div className="bulk-info">
-            <h4>📋 Instrucciones para selección de carpeta:</h4>
+            <h4>📋 Instrucciones para selección de carpeta (Modo Local):</h4>
             <ul>
-              <li>Selecciona una carpeta que contenga libros PDF, EPUB y ZIP</li>
+              <li>Selecciona una carpeta que contenga libros PDF y EPUB</li>
               <li>La aplicación buscará recursivamente en todos los subdirectorios</li>
               <li>Se procesarán los archivos uno por uno para evitar límites de tamaño</li>
               <li>Cada libro será analizado con IA para extraer metadatos</li>
               <li>Se detectarán automáticamente duplicados por nombre de archivo, título y autor</li>
               <li>Los duplicados no se agregarán a la biblioteca</li>
-              <li>Se procesarán automáticamente archivos ZIP que contengan libros</li>
+              <li>Los libros se almacenarán localmente en el servidor</li>
               <li>Esta opción requiere un navegador moderno que soporte la API de directorios</li>
             </ul>
           </div>
@@ -407,7 +520,9 @@ function UploadView() {
       <button 
         onClick={handleUpload} 
         className="upload-button" 
-        disabled={isLoading || (!selectedFile && !selectedZip && !selectedFolder)}
+        disabled={isLoading || 
+                 (!selectedFile && !selectedZip && !selectedFolder) ||
+                 (uploadMode === 'folder' && appMode !== 'local')}
       >
         {isLoading ? 'Procesando...' : `Analizar y Guardar ${uploadMode === 'single' ? 'Libro' : 'Libros'}`}
       </button>

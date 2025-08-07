@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy.sql import func
 from database import Base
 
 class Book(Base):
@@ -9,9 +10,10 @@ class Book(Base):
     author = Column(String, index=True)
     category = Column(String, index=True)
     cover_image_url = Column(String, nullable=True)
+    upload_date = Column(DateTime(timezone=True), server_default=func.now())
     
     # Campos para Google Drive (almacenamiento principal)
-    drive_file_id = Column(String, nullable=False) # ID del archivo en Google Drive (obligatorio)
+    drive_file_id = Column(String, nullable=True) # ID del archivo en Google Drive (opcional para libros locales)
     drive_web_link = Column(String, nullable=True) # Link web del archivo en Drive
     drive_letter_folder = Column(String, nullable=True) # Carpeta de letra (A-Z)
     drive_filename = Column(String, nullable=True) # Nombre original del archivo en Drive

@@ -36,11 +36,8 @@ const ModeSelector = ({ onModeChange, currentMode = 'local' }) => {
           <span className="mode-text">Drive</span>
         </button>
       </div>
-      <div className="mode-indicator">
-        <span className={`mode-badge ${mode}`}>
-          {mode === 'local' ? '💾 Local' : '☁️ Drive'}
-        </span>
-      </div>
+      
+      
     </div>
   );
 };

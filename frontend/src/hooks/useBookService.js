@@ -17,10 +17,12 @@ export const useBookService = () => {
         if (params.toString()) url += '?' + params.toString();
         
         const response = await fetch(url);
+        
         if (!response.ok) {
           throw new Error('Error al obtener libros del servidor local');
         }
-        return await response.json();
+        const data = await response.json();
+        return data;
       } else if (isDriveMode) {
         let url = `${BACKEND_URL}/api/drive/books/`;
         const params = new URLSearchParams();
@@ -29,13 +31,15 @@ export const useBookService = () => {
         if (params.toString()) url += '?' + params.toString();
         
         const response = await fetch(url);
+        
         if (!response.ok) {
           throw new Error('Error al obtener libros de Google Drive');
         }
-        return await response.json();
+        const data = await response.json();
+        return data;
       }
     } catch (error) {
-      console.error('Error en getBooks:', error);
+      console.error('❌ Error en getBooks:', error);
       throw error;
     }
   }, [isLocalMode, isDriveMode]);
@@ -46,22 +50,52 @@ export const useBookService = () => {
       formData.append('book_file', file);
 
       if (isLocalMode) {
-        const response = await fetch(`${BACKEND_URL}/api/upload-book/`, {
+        const response = await fetch(`${BACKEND_URL}/api/upload-book-local/`, {
           method: 'POST',
           body: formData,
         });
-        if (!response.ok) {
-          throw new Error('Error al subir libro al servidor local');
+        
+        if (response.status === 409) {
+          // Libro duplicado
+          const errorData = await response.json();
+          return {
+            success: false,
+            isDuplicate: true,
+            detail: errorData.detail || 'Libro duplicado',
+            title: errorData.title,
+            author: errorData.author
+          };
         }
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+        }
+        
         return await response.json();
       } else if (isDriveMode) {
         const response = await fetch(`${BACKEND_URL}/api/drive/books/upload`, {
           method: 'POST',
           body: formData,
         });
-        if (!response.ok) {
-          throw new Error('Error al subir libro a Google Drive');
+        
+        if (response.status === 409) {
+          // Libro duplicado
+          const errorData = await response.json();
+          return {
+            success: false,
+            isDuplicate: true,
+            detail: errorData.detail || 'Libro duplicado',
+            title: errorData.title,
+            author: errorData.author
+          };
         }
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+        }
+        
         return await response.json();
       }
     } catch (error) {
@@ -79,7 +113,7 @@ export const useBookService = () => {
         if (!response.ok) {
           throw new Error('Error al eliminar libro del servidor local');
         }
-        return await response.json();
+        return response;
       } else if (isDriveMode) {
         const response = await fetch(`${BACKEND_URL}/api/drive/books/${bookId}`, {
           method: 'DELETE',
@@ -87,7 +121,7 @@ export const useBookService = () => {
         if (!response.ok) {
           throw new Error('Error al eliminar libro de Google Drive');
         }
-        return await response.json();
+        return response;
       }
     } catch (error) {
       console.error('Error en deleteBook:', error);
@@ -102,13 +136,13 @@ export const useBookService = () => {
         if (!response.ok) {
           throw new Error('Error al obtener contenido del libro local');
         }
-        return await response.text();
+        return await response.blob(); // Cambiar de text() a blob() para archivos binarios
       } else if (isDriveMode) {
         const response = await fetch(`${BACKEND_URL}/api/drive/books/${bookId}/content`);
         if (!response.ok) {
           throw new Error('Error al obtener contenido del libro de Drive');
         }
-        return await response.json();
+        return await response.blob(); // Cambiar de json() a blob() para archivos binarios
       }
     } catch (error) {
       console.error('Error en getBookContent:', error);
