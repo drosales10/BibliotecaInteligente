@@ -7,16 +7,17 @@ const BACKEND_URL = 'http://localhost:8001';
 export const useBookService = () => {
   const { appMode, isLocalMode, isDriveMode } = useAppMode();
 
-  const getBooks = useCallback(async (category = null, search = null) => {
+  const getBooks = useCallback(async (category = null, search = null, page = 1, perPage = 20) => {
     try {
       if (isLocalMode) {
         let url = `${BACKEND_URL}/api/books/`;
         const params = new URLSearchParams();
         if (category) params.append('category', category);
         if (search) params.append('search', search);
-        if (params.toString()) url += '?' + params.toString();
+        params.append('page', page.toString());
+        params.append('per_page', perPage.toString());
         
-        const response = await fetch(url);
+        const response = await fetch(`${url}?${params.toString()}`);
         
         if (!response.ok) {
           throw new Error('Error al obtener libros del servidor local');
@@ -28,9 +29,10 @@ export const useBookService = () => {
         const params = new URLSearchParams();
         if (category) params.append('category', category);
         if (search) params.append('search', search);
-        if (params.toString()) url += '?' + params.toString();
+        params.append('page', page.toString());
+        params.append('per_page', perPage.toString());
         
-        const response = await fetch(url);
+        const response = await fetch(`${url}?${params.toString()}`);
         
         if (!response.ok) {
           throw new Error('Error al obtener libros de Google Drive');

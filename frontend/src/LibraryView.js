@@ -2,74 +2,82 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, Link, useLocation } from 'react-router-dom';
 import { useBookService } from './hooks/useBookService';
 import { useAppMode } from './contexts/AppModeContext';
+import { usePagination } from './hooks/usePagination';
+import useLoadingState from './hooks/useLoadingState';
+import useAdvancedSearch from './hooks/useAdvancedSearch';
 import SyncToDriveButton from './components/SyncToDriveButton';
 import BulkSyncToDriveButton from './components/BulkSyncToDriveButton';
+import PaginationControls from './components/PaginationControls';
+import LazyImage from './components/LazyImage';
+import BookCardSkeleton, { BookCardSkeletonGrid } from './components/BookCardSkeleton';
+import LoadingSpinner, { LoadingOverlay, LoadingInline } from './components/LoadingSpinner';
+import ProgressIndicator, { IndeterminateProgress } from './components/ProgressIndicator';
+import AdvancedSearchBar from './components/AdvancedSearchBar';
+import SearchFilters from './components/SearchFilters';
+import FilterChips from './components/FilterChips';
 import './LibraryView.css';
 
-// Hook personalizado para debounce
-const useDebounce = (value, delay) => {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-  return debouncedValue;
-};
 
-// Componente para la portada (con fallback a genérica)
-const BookCover = ({ src, alt, title }) => {
-  const [hasError, setHasError] = useState(false);
-  useEffect(() => { setHasError(false); }, [src]);
-  const handleError = () => { 
-    console.error('❌ Error cargando imagen:', src);
-    setHasError(true); 
-  };
 
-  // Función para obtener la URL correcta de la imagen
-  const getImageUrl = (imageSrc) => {
-    if (!imageSrc) {
-      return '';
-    }
-    
-    // Si es una URL completa (Google Drive), usar el endpoint del backend
-    if (imageSrc.startsWith('http') && imageSrc.includes('drive.google.com')) {
-      // Extraer el file_id de la URL de Google Drive
-      // Formato: https://drive.google.com/file/d/{file_id}/view?usp=drivesdk
-      if (imageSrc.includes('/file/d/')) {
-        const fileId = imageSrc.split('/file/d/')[1].split('/')[0];
-        const backendUrl = `http://localhost:8001/api/drive/cover/${fileId}`;
-        return backendUrl;
-      }
-      
-      return imageSrc;
-    }
-    
-    // Si es una ruta local, construir la URL completa
-    if (imageSrc.startsWith('/')) {
-      return `http://localhost:8001${imageSrc}`;
-    }
-    
-    // Si es solo el nombre del archivo, construir la URL correcta
-    // Las imágenes se guardan en static/covers/, pero se sirven desde /static/
-    return `http://localhost:8001/static/covers/${imageSrc}`;
-  };
-
-  const imageUrl = getImageUrl(src);
-
-  if (hasError || !imageUrl) {
-    const initial = title ? title[0].toUpperCase() : '?';
-    return (
-      <div className="generic-cover">
-        <span className="generic-cover-initial">{initial}</span>
-      </div>
-    );
+// Función para obtener la URL correcta de la imagen
+const getImageUrl = (imageSrc) => {
+  if (!imageSrc) {
+    return '';
   }
   
-  return <img src={imageUrl} alt={alt} className="book-cover" onError={handleError} />;
+  // Si es una URL completa (Google Drive), usar el endpoint del backend
+  if (imageSrc.startsWith('http') && imageSrc.includes('drive.google.com')) {
+    // Extraer el file_id de la URL de Google Drive
+    // Formato: https://drive.google.com/file/d/{file_id}/view?usp=drivesdk
+    if (imageSrc.includes('/file/d/')) {
+      const fileId = imageSrc.split('/file/d/')[1].split('/')[0];
+      const backendUrl = `http://localhost:8001/api/drive/cover/${fileId}`;
+      return backendUrl;
+    }
+    
+    return imageSrc;
+  }
+  
+  // Si es una ruta local, construir la URL completa
+  if (imageSrc.startsWith('/')) {
+    return `http://localhost:8001${imageSrc}`;
+  }
+  
+  // Si es solo el nombre del archivo, construir la URL correcta
+  // Las imágenes se guardan en static/covers/, pero se sirven desde /static/
+  return `http://localhost:8001/static/covers/${imageSrc}`;
+};
+
+// Componente para la portada con lazy loading
+const BookCover = ({ src, alt, title }) => {
+  const imageUrl = getImageUrl(src);
+  const initial = title ? title[0].toUpperCase() : '?';
+  
+  // Fallback personalizado para libros
+  const fallbackElement = (
+    <div className="generic-cover">
+      <span className="generic-cover-initial">{initial}</span>
+    </div>
+  );
+
+  return (
+    <LazyImage
+      src={imageUrl}
+      alt={alt}
+      title={title}
+      className="book-cover-lazy"
+      variant="book-cover"
+      showSkeleton={true}
+      skeletonProps={{
+        variant: 'book-cover',
+        width: '100%',
+        height: '280px'
+      }}
+      fallback={fallbackElement}
+      threshold={0.1}
+      rootMargin="100px"
+    />
+  );
 };
 
 // Componente para el indicador de ubicación
@@ -139,8 +147,6 @@ const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, bookTitle, isDele
 
 function LibraryView() {
   const [searchParams] = useSearchParams();
-  const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const [deleteModal, setDeleteModal] = useState({ 
     isOpen: false, 
     bookId: null, 
@@ -152,77 +158,173 @@ function LibraryView() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedBooks, setSelectedBooks] = useState(new Set());
   const [books, setBooks] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const location = useLocation();
 
   // Usar los nuevos hooks
   const { getBooks, deleteBook, appMode } = useBookService();
   const { isLocalMode, isDriveMode } = useAppMode();
+  
+  // Hook de búsqueda avanzada
+  const {
+    searchTerm,
+    filters,
+    suggestions,
+    searchHistory,
+    isAdvancedMode,
+    isLoading: searchLoading,
+    performSearch,
+    updateSearchTerm,
+    updateFilters,
+    clearSearch,
+    toggleAdvancedMode,
+    removeFilter,
+    clearAllFilters,
+    getActiveFilters
+  } = useAdvancedSearch();
+  
+  // Hook de paginación
+  const {
+    currentPage,
+    perPage,
+    totalItems,
+    totalPages,
+    paginationInfo,
+    goToPage,
+    changePerPage,
+    updatePaginationInfo,
+    resetPagination
+  } = usePagination(1, 20);
+
+  // Hook de estados de carga mejorados
+  const {
+    loadingStates,
+    isLoading,
+    startLoading,
+    stopLoading,
+    withLoading
+  } = useLoadingState({
+    initial: true,
+    search: false,
+    pagination: false,
+    delete: false,
+    bulkDelete: false,
+    sync: false
+  });
 
   // Función para cargar libros
   const fetchBooks = useCallback(async () => {
     try {
-      setLoading(true);
       setError(null);
       
       const category = searchParams.get('category');
-      const booksData = await getBooks(category, debouncedSearchTerm);
+      // Por ahora, usar solo búsqueda simple
+      const searchQuery = searchTerm;
       
-      // Filtrar libros según el modo actual
-      let filteredBooks = booksData;
+      const booksData = await getBooks(category, searchQuery, currentPage, perPage);
       
-      if (isLocalMode) {
-        // En modo local, mostrar solo libros locales (source: 'local' o que no estén en Drive)
-        filteredBooks = booksData.filter(book => 
-          book.source === 'local' || 
-          (!book.synced_to_drive && !book.drive_file_id)
-        );
-      } else if (isDriveMode) {
-        // En modo nube, mostrar solo libros de Drive (source: 'drive' o synced_to_drive: true)
-        filteredBooks = booksData.filter(book => 
-          book.source === 'drive' || 
-          book.synced_to_drive === true ||
-          book.drive_file_id
-        );
+      // Verificar si la respuesta tiene estructura de paginación
+      if (booksData && booksData.items && booksData.pagination) {
+        // Nueva estructura con paginación
+        const { items: booksList, pagination } = booksData;
+        
+        // Filtrar libros según el modo actual
+        let filteredBooks = booksList;
+        
+        if (isLocalMode) {
+          // En modo local, mostrar solo libros locales (source: 'local' o que no estén en Drive)
+          filteredBooks = booksList.filter(book => 
+            book.source === 'local' || 
+            (!book.synced_to_drive && !book.drive_file_id)
+          );
+        } else if (isDriveMode) {
+          // En modo nube, mostrar solo libros de Drive (source: 'drive' o synced_to_drive: true)
+          filteredBooks = booksList.filter(book => 
+            book.source === 'drive' || 
+            book.synced_to_drive === true ||
+            book.drive_file_id
+          );
+        }
+        
+        // Agregar información de ubicación a los libros
+        const booksWithLocation = filteredBooks.map(book => ({
+          ...book,
+          // Asegurar que tenga valores por defecto correctos
+          source: book.source || (book.drive_file_id ? 'drive' : 'local'),
+          synced_to_drive: book.synced_to_drive || false
+        }));
+        
+        setBooks(booksWithLocation);
+        updatePaginationInfo(pagination);
+      } else {
+        // Estructura antigua (sin paginación) - mantener compatibilidad
+        let filteredBooks = booksData;
+        
+        if (isLocalMode) {
+          filteredBooks = booksData.filter(book => 
+            book.source === 'local' || 
+            (!book.synced_to_drive && !book.drive_file_id)
+          );
+        } else if (isDriveMode) {
+          filteredBooks = booksData.filter(book => 
+            book.source === 'drive' || 
+            book.synced_to_drive === true ||
+            book.drive_file_id
+          );
+        }
+        
+        const booksWithLocation = filteredBooks.map(book => ({
+          ...book,
+          source: book.source || (book.drive_file_id ? 'drive' : 'local'),
+          synced_to_drive: book.synced_to_drive || false
+        }));
+        
+        setBooks(booksWithLocation);
+        // Resetear paginación para estructura antigua
+        resetPagination();
       }
-      
-      // Agregar información de ubicación a los libros
-      const booksWithLocation = filteredBooks.map(book => ({
-        ...book,
-        // Asegurar que tenga valores por defecto correctos
-        source: book.source || (book.drive_file_id ? 'drive' : 'local'),
-        synced_to_drive: book.synced_to_drive || false
-      }));
-      
-      setBooks(booksWithLocation);
     } catch (err) {
       console.error('❌ Error en fetchBooks:', err);
       setError(err.message);
       console.error('Error al cargar libros:', err);
-    } finally {
-      setLoading(false);
     }
-  }, [getBooks, searchParams, debouncedSearchTerm, isLocalMode, isDriveMode, appMode]);
+  }, [getBooks, searchParams, searchTerm, filters, isAdvancedMode, isLocalMode, isDriveMode, appMode, currentPage, perPage, updatePaginationInfo, resetPagination]);
 
   // Efecto para cargar libros al montar el componente
   useEffect(() => {
-    fetchBooks();
-  }, [fetchBooks]);
+    withLoading('initial', fetchBooks);
+  }, [fetchBooks, withLoading]);
 
   // Efecto para recargar libros cuando cambia el modo de aplicación
   useEffect(() => {
-    fetchBooks();
-  }, [appMode, isLocalMode, isDriveMode]);
+    withLoading('initial', fetchBooks);
+  }, [appMode, isLocalMode, isDriveMode, withLoading]);
 
   // Efecto para actualizar libros cuando cambia la ubicación (después de añadir un libro)
   useEffect(() => {
     if (location.state?.refreshBooks) {
-      fetchBooks();
+      withLoading('initial', fetchBooks);
       // Limpiar el estado para evitar recargas innecesarias
       window.history.replaceState({}, document.title);
     }
-  }, [location.state, fetchBooks]);
+  }, [location.state, fetchBooks, withLoading]);
+
+  // Efecto para resetear paginación cuando cambia la búsqueda o categoría
+  useEffect(() => {
+    resetPagination();
+  }, [searchTerm, filters, searchParams, resetPagination]);
+
+  // Efecto para recargar libros cuando cambia la paginación
+  useEffect(() => {
+    withLoading('pagination', fetchBooks);
+  }, [currentPage, perPage, withLoading]);
+
+  // Efecto para búsqueda avanzada
+  useEffect(() => {
+    if (isAdvancedMode && (searchTerm || Object.keys(filters).length > 0)) {
+      withLoading('search', fetchBooks);
+    }
+  }, [searchTerm, filters, isAdvancedMode, withLoading, fetchBooks]);
 
   const handleDeleteClick = (bookId, bookTitle) => {
     setDeleteModal({ 
@@ -252,7 +354,7 @@ function LibraryView() {
       
       if (response.ok) {
         // Recargar la lista de libros para actualizar la UI
-        fetchBooks();
+        await withLoading('initial', fetchBooks);
         resetModal();
       } else {
         const errorData = await response.json();
@@ -292,7 +394,7 @@ function LibraryView() {
       }
 
       // Re-fetch books to update the UI
-      fetchBooks();
+      await withLoading('initial', fetchBooks);
       resetModal();
       setSelectionMode(false);
       setSelectedBooks(new Set());
@@ -454,18 +556,67 @@ function LibraryView() {
       </div>
       
       <div className="controls-container">
-        <input
-          type="text"
-          placeholder="Buscar por título, autor o categoría..."
-          className="search-bar"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+        <AdvancedSearchBar
+          searchTerm={searchTerm}
+          onSearchChange={updateSearchTerm}
+          onClear={clearSearch}
+          onToggleAdvanced={toggleAdvancedMode}
+          isAdvancedMode={isAdvancedMode}
+          suggestions={suggestions}
+          searchHistory={searchHistory}
+          isLoading={searchLoading}
+        />
+        
+        {isAdvancedMode && (
+          <SearchFilters
+            filters={filters}
+            onFiltersChange={updateFilters}
+            onClearFilters={clearAllFilters}
+          />
+        )}
+        
+        <FilterChips
+          activeFilters={getActiveFilters()}
+          onRemoveFilter={removeFilter}
+          onClearAll={clearAllFilters}
         />
       </div>
 
       {error && <p className="error-message">{error}</p>}
-      {loading && <p>Cargando libros...</p>}
-      {!loading && booksLength === 0 && !error && <p>No se encontraron libros que coincidan con tu búsqueda.</p>}
+      
+      {/* Estados de carga mejorados */}
+      {isLoading('initial') && (
+        <div className="loading-container">
+          <BookCardSkeletonGrid count={6} variant="default" />
+        </div>
+      )}
+      
+      {isLoading('search') && (
+        <div className="loading-container">
+          <LoadingSpinner 
+            size="medium" 
+            variant="dots" 
+            text="Buscando libros..." 
+            color="primary"
+          />
+        </div>
+      )}
+      
+      {isLoading('pagination') && (
+        <div className="loading-container">
+          <IndeterminateProgress 
+            text="Cargando página..." 
+            variant="default"
+            size="small"
+          />
+        </div>
+      )}
+      
+      {!isLoading('initial') && !isLoading('search') && !isLoading('pagination') && booksLength === 0 && !error && (
+        <div className="empty-state">
+          <p>No se encontraron libros que coincidan con tu búsqueda.</p>
+        </div>
+      )}
 
       <div className="book-grid">
         {safeBooks.map((book) => {
@@ -520,6 +671,26 @@ function LibraryView() {
           );
         })}
       </div>
+
+      {/* Controles de paginación */}
+      {!isLoading('initial') && !isLoading('search') && !isLoading('pagination') && totalPages > 1 && (
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          perPage={perPage}
+          onPageChange={goToPage}
+          onPerPageChange={changePerPage}
+          hasNext={paginationInfo.hasNext}
+          hasPrev={paginationInfo.hasPrev}
+          startItem={paginationInfo.startItem}
+          endItem={paginationInfo.endItem}
+          pageNumbers={paginationInfo.pageNumbers}
+          showPerPageSelector={true}
+          showInfo={true}
+          className="library-pagination"
+        />
+      )}
 
       <DeleteConfirmationModal
         isOpen={deleteModal.isOpen}

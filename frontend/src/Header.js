@@ -22,7 +22,7 @@ function Header() {
   return (
     <header className="app-header">
       <div className="header-logo">
-        <h1>📚 Librería Inteligente</h1>
+        <h1>📚 Biblioteca Inteligente</h1>
         <div className="header-controls">
           <ModeSelector 
             currentMode={appMode}

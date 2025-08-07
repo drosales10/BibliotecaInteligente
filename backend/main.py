@@ -58,7 +58,7 @@ def analyze_with_gemini(text: str, max_retries: int = 3) -> dict:
     Tu tarea es identificar el título, el autor y la categoría principal del libro.
     
     INSTRUCCIONES ESPECÍFICAS:
-    1. Para el TÍTULO: Busca el título principal del libro, generalmente en mayúsculas o al inicio del texto
+    1. Para el TÍTULO: Busca el título principal del libro, generalmente en mayúsculas o al inicio del texto. El título debe guardarse en la base de datos en formato capitalizado, nunca todo en mayúsculas.
     2. Para el AUTOR: Busca el nombre del autor, que suele aparecer después de "por", "de", "autor:", o en la portada, también puede estar en el nombre del mismo archivo
     3. Para la CATEGORÍA: Determina el género o categoría principal SIEMPRE EN ESPAÑOL (ej: Psicología, Literatura, Ciencia, Historia, Tecnología, Medicina, etc.)
     4. Para la categoria te puedes guiar por el nombre de la ruta del libro, por ejemplo: "Psicología/Psicología General/Psicología Clínica"
@@ -661,8 +661,14 @@ async def upload_book(db: Session = Depends(get_db), book_file: UploadFile = Fil
                 pass  # Ignorar errores de limpieza
 
 @app.get("/api/books/")
-def read_books(category: str | None = None, search: str | None = None, db: Session = Depends(get_db)):
-    return crud.get_books(db, category=category, search=search)
+def read_books(
+    category: str | None = None, 
+    search: str | None = None, 
+    page: int = Query(1, ge=1, description="Número de página"),
+    per_page: int = Query(20, ge=1, le=100, description="Libros por página"),
+    db: Session = Depends(get_db)
+):
+    return crud.get_books(db, category=category, search=search, page=page, per_page=per_page)
 
 @app.get("/api/categories/", response_model=List[str])
 def read_categories(db: Session = Depends(get_db)):
@@ -2040,13 +2046,19 @@ def test_duplicate_detection(db: Session = Depends(get_db)):
 
 
 @app.get("/api/drive/books/")
-def get_drive_books(category: str | None = None, search: str | None = None, db: Session = Depends(get_db)):
+def get_drive_books(
+    category: str | None = None, 
+    search: str | None = None, 
+    page: int = Query(1, ge=1, description="Número de página"),
+    per_page: int = Query(20, ge=1, le=100, description="Libros por página"),
+    db: Session = Depends(get_db)
+):
     """
-    Obtiene libros desde la base de datos que están en Google Drive
+    Obtiene libros desde la base de datos que están en Google Drive con paginación
     """
     try:
         # Obtener libros de la base de datos que están en Google Drive
-        books = crud.get_drive_books(db, category=category, search=search)
+        books = crud.get_drive_books(db, category=category, search=search, page=page, per_page=per_page)
         
         # Los libros ya vienen como diccionarios desde crud.get_drive_books
         return books
