@@ -1,39 +1,44 @@
 .categories-container {
   width: 100%;
-  padding: 20px;
+  padding: var(--space-5);
   box-sizing: border-box;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .categories-container h2 {
-  color: #61dafb;
-  border-bottom: 2px solid #61dafb;
-  padding-bottom: 10px;
-  margin-bottom: 20px;
+  color: var(--primary-color);
+  border-bottom: 2px solid var(--primary-color);
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-5);
 }
 
 .categories-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 15px;
+  gap: var(--space-4);
 }
 
 .category-card {
-  background-color: #282c34;
-  color: #61dafb;
-  padding: 20px;
-  border-radius: 8px;
+  background-color: var(--bg-elevated);
+  color: var(--primary-color);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
   text-align: center;
   text-decoration: none;
   font-weight: bold;
-  border: 1px solid #61dafb;
-  transition: background-color 0.2s, transform 0.2s;
+  border: 1px solid var(--primary-color);
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-sm);
 }
 
 .category-card:hover {
-  background-color: #3a3f4a;
+  background-color: var(--bg-secondary);
   transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
 }
 
 .error-message {
-  color: #ff6b6b;
+  color: var(--error-color);
+  font-weight: bold;
 }

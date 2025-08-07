@@ -1,0 +1,383 @@
+.modern-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: none;
+  border-radius: var(--radius-lg);
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.5;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+/* Efecto de brillo en hover */
+.modern-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left var(--transition-slow);
+}
+
+.modern-button:hover::before {
+  left: 100%;
+}
+
+/* Variantes */
+.modern-button--primary {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-md);
+}
+
+.modern-button--primary:hover {
+  background: linear-gradient(135deg, var(--primary-hover), var(--primary-dark));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.modern-button--secondary {
+  background: linear-gradient(135deg, var(--secondary-color), var(--secondary-hover));
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-md);
+}
+
+.modern-button--secondary:hover {
+  background: linear-gradient(135deg, var(--secondary-hover), var(--secondary-color));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.modern-button--accent {
+  background: linear-gradient(135deg, var(--accent-color), var(--accent-hover));
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-md);
+}
+
+.modern-button--accent:hover {
+  background: linear-gradient(135deg, var(--accent-hover), var(--accent-color));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.modern-button--outline {
+  background: transparent;
+  color: var(--primary-color);
+  border: 2px solid var(--primary-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.modern-button--outline:hover {
+  background: var(--primary-color);
+  color: var(--text-inverse);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.modern-button--ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+
+.modern-button--ghost:hover {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--primary-color);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.modern-button--danger {
+  background: linear-gradient(135deg, var(--error-color), #dc2626);
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-md);
+}
+
+.modern-button--danger:hover {
+  background: linear-gradient(135deg, #dc2626, var(--error-color));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Tamaños */
+.modern-button--small {
+  padding: var(--space-2) var(--space-4);
+  font-size: 0.875rem;
+  gap: var(--space-1);
+}
+
+.modern-button--medium {
+  padding: var(--space-3) var(--space-6);
+  font-size: 1rem;
+  gap: var(--space-2);
+}
+
+.modern-button--large {
+  padding: var(--space-4) var(--space-8);
+  font-size: 1.125rem;
+  gap: var(--space-3);
+}
+
+/* Estados */
+.modern-button--disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.modern-button--disabled::before {
+  display: none;
+}
+
+.modern-button--loading {
+  cursor: wait;
+  pointer-events: none;
+}
+
+.modern-button--loading::before {
+  display: none;
+}
+
+.modern-button--full-width {
+  width: 100%;
+}
+
+/* Iconos */
+.modern-button__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1em;
+  transition: transform var(--transition-normal);
+}
+
+.modern-button__icon--left {
+  margin-right: var(--space-1);
+}
+
+.modern-button__icon--right {
+  margin-left: var(--space-1);
+}
+
+.modern-button:hover .modern-button__icon {
+  transform: scale(1.1);
+}
+
+/* Loader */
+.modern-button__loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: var(--space-2);
+}
+
+.modern-button__spinner {
+  width: 1.2em;
+  height: 1.2em;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Contenido */
+.modern-button__content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Focus visible para accesibilidad */
+.modern-button:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Estados activos */
+.modern-button:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.modern-button:active::before {
+  display: none;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .modern-button--large {
+    padding: var(--space-3) var(--space-6);
+    font-size: 1rem;
+  }
+  
+  .modern-button--medium {
+    padding: var(--space-2) var(--space-4);
+    font-size: 0.9rem;
+  }
+  
+  .modern-button--small {
+    padding: var(--space-1) var(--space-3);
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .modern-button {
+    font-size: 0.9rem;
+  }
+  
+  .modern-button--large {
+    padding: var(--space-3) var(--space-5);
+  }
+  
+  .modern-button--medium {
+    padding: var(--space-2) var(--space-4);
+  }
+  
+  .modern-button--small {
+    padding: var(--space-1) var(--space-2);
+  }
+}
+
+/* Mejoras para accesibilidad */
+@media (prefers-reduced-motion: reduce) {
+  .modern-button {
+    transition: none;
+  }
+  
+  .modern-button::before {
+    display: none;
+  }
+  
+  .modern-button:hover {
+    transform: none;
+  }
+  
+  .modern-button:hover .modern-button__icon {
+    transform: none;
+  }
+  
+  .modern-button__spinner {
+    animation: none;
+  }
+}
+
+/* Mejoras para contraste alto */
+@media (prefers-contrast: high) {
+  .modern-button {
+    border: 2px solid currentColor;
+  }
+  
+  .modern-button--outline {
+    border-width: 3px;
+  }
+}
+
+/* Mejoras para modo oscuro específico */
+.dark-mode .modern-button--ghost:hover {
+  background: rgba(96, 165, 250, 0.1);
+  color: var(--primary-light);
+}
+
+.dark-mode .modern-button--outline {
+  border-color: var(--primary-light);
+  color: var(--primary-light);
+}
+
+.dark-mode .modern-button--outline:hover {
+  background: var(--primary-light);
+  color: var(--bg-primary);
+}
+
+/* Estados de carga específicos */
+.modern-button--loading .modern-button__content {
+  opacity: 0.7;
+}
+
+.modern-button--loading .modern-button__icon {
+  display: none;
+}
+
+/* Efectos de presión para dispositivos táctiles */
+@media (hover: none) {
+  .modern-button:active {
+    transform: scale(0.98);
+  }
+  
+  .modern-button--disabled:active {
+    transform: none;
+  }
+}
+
+/* Grupos de botones */
+.modern-button-group {
+  display: inline-flex;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.modern-button-group .modern-button {
+  border-radius: 0;
+  margin: 0;
+  box-shadow: none;
+}
+
+.modern-button-group .modern-button:first-child {
+  border-top-left-radius: var(--radius-lg);
+  border-bottom-left-radius: var(--radius-lg);
+}
+
+.modern-button-group .modern-button:last-child {
+  border-top-right-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
+}
+
+.modern-button-group .modern-button:not(:last-child) {
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Variantes especiales */
+.modern-button--floating {
+  position: fixed;
+  bottom: var(--space-6);
+  right: var(--space-6);
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  padding: 0;
+  box-shadow: var(--shadow-xl);
+  z-index: var(--z-fixed);
+}
+
+.modern-button--floating:hover {
+  transform: translateY(-4px) scale(1.05);
+  box-shadow: var(--shadow-xl), 0 0 0 8px rgba(59, 130, 246, 0.1);
+}
+
+.modern-button--floating .modern-button__content {
+  display: none;
+}
+
+.modern-button--floating .modern-button__icon {
+  font-size: 1.5em;
+  margin: 0;
+} 

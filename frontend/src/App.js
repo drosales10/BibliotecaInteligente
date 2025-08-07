@@ -1,32 +1,37 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { AppModeProvider } from './contexts/AppModeContext';
 import Header from './Header';
 import LibraryView from './LibraryView';
 import UploadView from './UploadView';
 import CategoriesView from './CategoriesView';
 import ToolsView from './ToolsView';
-import ReaderView from './ReaderView';
-import ErrorBoundary from './ErrorBoundary';
+import ReadView from './ReadView';
+import TestComponent from './TestComponent';
 import './App.css';
 
 function App() {
   return (
-    <ErrorBoundary>
-      <BrowserRouter>
-        <div className="App">
-          <Header />
-          <main className="App-content">
-            <Routes>
-              <Route path="/" element={<LibraryView />} />
-              <Route path="/upload" element={<UploadView />} />
-              <Route path="/etiquetas" element={<CategoriesView />} />
-              <Route path="/herramientas" element={<ToolsView />} />
-              <Route path="/leer/:bookId" element={<ReaderView />} />
-            </Routes>
-          </main>
-        </div>
-      </BrowserRouter>
-    </ErrorBoundary>
+    <ThemeProvider>
+      <AppModeProvider>
+        <Router>
+          <div className="App">
+            <Header />
+            <main className="main-content">
+              <Routes>
+                <Route path="/" element={<LibraryView />} />
+                <Route path="/upload" element={<UploadView />} />
+                <Route path="/categories" element={<CategoriesView />} />
+                <Route path="/tools" element={<ToolsView />} />
+                <Route path="/leer/:id" element={<ReadView />} />
+                <Route path="/test" element={<TestComponent />} />
+              </Routes>
+            </main>
+          </div>
+        </Router>
+      </AppModeProvider>
+    </ThemeProvider>
   );
 }
 
