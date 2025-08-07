@@ -526,7 +526,7 @@ function LibraryView() {
   return (
     <div className="library-container">
       <div className="library-header">
-        <h2>Mi Biblioteca</h2>
+        
         <div className="library-actions">
           <BulkSyncToDriveButton books={safeBooks} onSyncComplete={handleSyncComplete} />
           <button 

@@ -1418,14 +1418,25 @@ async def upload_bulk_books(
         
         # Agregar resultados de duplicados detectados en verificación previa
         for duplicate in duplicate_files:
+            existing_book_dict = None
+            if duplicate.get("existing_book"):
+                existing_book = duplicate["existing_book"]
+                existing_book_dict = {
+                    "id": existing_book.id,
+                    "title": existing_book.title,
+                    "author": existing_book.author,
+                    "category": existing_book.category
+                }
+            
             results.append({
                 "success": False,
-                "file": duplicate,
+                "file": duplicate["file"],
                 "error": "Duplicado detectado (verificación previa)",
                 "duplicate_info": {
                     "is_duplicate": True,
-                    "reason": "Archivo ya existe en la base de datos",
-                    "message": "Este archivo ya ha sido procesado anteriormente"
+                    "reason": duplicate.get("reason", "Archivo ya existe en la base de datos"),
+                    "existing_book": existing_book_dict,
+                    "message": duplicate.get("message", "Este archivo ya ha sido procesado anteriormente")
                 }
             })
         
@@ -1539,14 +1550,25 @@ async def upload_bulk_books_local(
         
         # Agregar resultados de duplicados detectados en verificación previa
         for duplicate in duplicate_files:
+            existing_book_dict = None
+            if duplicate.get("existing_book"):
+                existing_book = duplicate["existing_book"]
+                existing_book_dict = {
+                    "id": existing_book.id,
+                    "title": existing_book.title,
+                    "author": existing_book.author,
+                    "category": existing_book.category
+                }
+            
             results.append({
                 "success": False,
-                "file": duplicate,
+                "file": duplicate["file"],
                 "error": "Duplicado detectado (verificación previa)",
                 "duplicate_info": {
                     "is_duplicate": True,
-                    "reason": "Archivo ya existe en la base de datos",
-                    "message": "Este archivo ya ha sido procesado anteriormente"
+                    "reason": duplicate.get("reason", "Archivo ya existe en la base de datos"),
+                    "existing_book": existing_book_dict,
+                    "message": duplicate.get("message", "Este archivo ya ha sido procesado anteriormente")
                 }
             })
         

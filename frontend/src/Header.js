@@ -22,7 +22,7 @@ function Header() {
   return (
     <header className="app-header">
       <div className="header-logo">
-        <h1>📚 Biblioteca Inteligente</h1>
+        
         <div className="header-controls">
           <ModeSelector 
             currentMode={appMode}
@@ -42,9 +42,10 @@ function Header() {
           )}
         </div>
       </div>
+      <h1>📚 Biblioteca Inteligente</h1>
       <nav className="header-nav">
         <NavLink to="/" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-          Mi Biblioteca
+          Libros
         </NavLink>
         <NavLink to="/upload" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
           Añadir Libro

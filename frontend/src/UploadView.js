@@ -13,6 +13,7 @@ function UploadView() {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(null);
+  const [showHelpModal, setShowHelpModal] = useState(false);
   const navigate = useNavigate();
   const { driveStatus } = useDriveStatus();
   const { uploadBook } = useBookService();
@@ -375,10 +376,17 @@ function UploadView() {
     }
   };
 
+  const openHelpModal = () => {
+    setShowHelpModal(true);
+  };
+
+  const closeHelpModal = () => {
+    setShowHelpModal(false);
+  };
+
   return (
     <div className="upload-view-container" onDrop={handleDrop} onDragOver={handleDragOver}>
-      <h2>Añadir Libros</h2>
-      
+            
       {/* Selector de modo */}
       <div className="upload-mode-selector">
         <button 
@@ -391,7 +399,7 @@ function UploadView() {
           className={`mode-button ${uploadMode === 'bulk' ? 'active' : ''}`}
           onClick={() => setUploadMode('bulk')}
         >
-          📚 Carga Masiva
+          📚 Carga de Libros en ZIP
         </button>
         <button 
           className={`mode-button ${uploadMode === 'folder' ? 'active' : ''}`}
@@ -403,7 +411,9 @@ function UploadView() {
 
       {uploadMode === 'single' ? (
         <div className="single-upload-section">
-          <p>Sube un libro (PDF o EPUB) para que la IA lo analice y lo añada a tu biblioteca.</p>
+          <div className="bulk-info">
+            <small>Sube un libro (PDF o EPUB) para que la IA lo analice y lo añada a tu biblioteca.</small>
+          </div>
           <div className="upload-container">
             <div className="drop-zone">
               {selectedFile ? (
@@ -425,10 +435,23 @@ function UploadView() {
         </div>
       ) : uploadMode === 'bulk' ? (
         <div className="bulk-upload-section">
-          <p>
-            Sube un archivo ZIP que contenga una carpeta con libros (PDF y EPUB). 
+          <div className="bulk-info">
+          <small>
+            Sube un archivo ZIP que contenga una carpeta con libros (PDF y EPUB). <br/>
             La aplicación procesará todos los libros de forma concurrente.
-          </p>
+          </small>
+          
+          <div className="help-section">
+              
+              <button 
+                onClick={openHelpModal}
+                className="help-button"
+                type="button"
+                title="Ver instrucciones detalladas"
+              >
+                ❓ Ayuda
+              </button>
+            </div></div>
           <div className="upload-container">
             <div className="drop-zone">
               {selectedZip ? (
@@ -447,27 +470,24 @@ function UploadView() {
               </label>
             </div>
           </div>
-          
-          <div className="bulk-info">
-            <h4>📋 Instrucciones para carga masiva:</h4>
-            <ul>
-              <li>Comprime una carpeta que contenga libros PDF y EPUB</li>
-              <li>La aplicación buscará recursivamente en todos los subdirectorios</li>
-              <li>Se procesarán hasta 4 libros simultáneamente</li>
-              <li>Cada libro será analizado con IA para extraer metadatos</li>
-              <li>Se detectarán automáticamente duplicados por nombre de archivo, título y autor</li>
-              <li>Los duplicados no se agregarán a la biblioteca</li>
-              <li>Se procesarán automáticamente archivos ZIP que contengan libros</li>
-              <li>Soporte para ZIPs anidados (ZIPs dentro de ZIPs)</li>
-            </ul>
-          </div>
         </div>
       ) : (
         <div className="folder-upload-section">
-          <p>
-            Selecciona una carpeta de tu computadora que contenga libros (PDF y EPUB). 
+          
+          <div className="bulk-info">
+          <small>
+            Selecciona una carpeta de tu computadora que contenga libros (PDF y EPUB). <br/>
             La aplicación procesará todos los archivos de forma secuencial en modo local.
-          </p>
+          </small>
+              <button 
+                onClick={openHelpModal}
+                className="help-button"
+                type="button"
+                title="Ver instrucciones detalladas"
+              >
+                ❓ Ayuda
+              </button>
+            </div>
           <div className="upload-container">
             <div className="drop-zone">
               {selectedFolder ? (
@@ -501,19 +521,9 @@ function UploadView() {
             </div>
           </div>
           
-          <div className="bulk-info">
-            <h4>📋 Instrucciones para selección de carpeta (Modo Local):</h4>
-            <ul>
-              <li>Selecciona una carpeta que contenga libros PDF y EPUB</li>
-              <li>La aplicación buscará recursivamente en todos los subdirectorios</li>
-              <li>Se procesarán los archivos uno por uno para evitar límites de tamaño</li>
-              <li>Cada libro será analizado con IA para extraer metadatos</li>
-              <li>Se detectarán automáticamente duplicados por nombre de archivo, título y autor</li>
-              <li>Los duplicados no se agregarán a la biblioteca</li>
-              <li>Los libros se almacenarán localmente en el servidor</li>
-              <li>Esta opción requiere un navegador moderno que soporte la API de directorios</li>
-            </ul>
-          </div>
+          
+            
+          
         </div>
       )}
 
@@ -541,6 +551,76 @@ function UploadView() {
       )}
 
       {message && <p className="message">{message}</p>}
+
+      {/* Modal de ayuda */}
+      {showHelpModal && (
+        <div className="modal-overlay" onClick={closeHelpModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>📋 Instrucciones de Carga</h3>
+              <button 
+                onClick={closeHelpModal}
+                className="modal-close-button"
+                type="button"
+                title="Cerrar"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              {uploadMode === 'bulk' ? (
+                <div>
+                  <h4>📦 Carga Masiva (Archivo ZIP)</h4>
+                  <ul>
+                    <li>Comprime una carpeta que contenga libros PDF y EPUB</li>
+                    <li>La aplicación buscará recursivamente en todos los subdirectorios</li>
+                    <li>Se procesarán hasta 4 libros simultáneamente</li>
+                    <li>Cada libro será analizado con IA para extraer metadatos</li>
+                    <li>Se detectarán automáticamente duplicados por nombre de archivo, título y autor</li>
+                    <li>Los duplicados no se agregarán a la biblioteca</li>
+                    <li>Se procesarán automáticamente archivos ZIP que contengan libros</li>
+                    <li>Soporte para ZIPs anidados (ZIPs dentro de ZIPs)</li>
+                  </ul>
+                </div>
+              ) : uploadMode === 'folder' ? (
+                <div>
+                  <h4>📁 Selección de Carpeta (Modo Local)</h4>
+                  <ul>
+                    <li>Selecciona una carpeta que contenga libros PDF y EPUB</li>
+                    <li>La aplicación buscará recursivamente en todos los subdirectorios</li>
+                    <li>Se procesarán los archivos uno por uno para evitar límites de tamaño</li>
+                    <li>Cada libro será analizado con IA para extraer metadatos</li>
+                    <li>Se detectarán automáticamente duplicados por nombre de archivo, título y autor</li>
+                    <li>Los duplicados no se agregarán a la biblioteca</li>
+                    <li>Los libros se almacenarán localmente en el servidor</li>
+                    <li>Esta opción requiere un navegador moderno que soporte la API de directorios</li>
+                  </ul>
+                </div>
+              ) : (
+                <div>
+                  <h4>📄 Carga Individual</h4>
+                  <ul>
+                    <li>Selecciona un archivo PDF o EPUB individual</li>
+                    <li>El libro será analizado con IA para extraer metadatos</li>
+                    <li>Se detectarán automáticamente duplicados por nombre de archivo, título y autor</li>
+                    <li>Los duplicados no se agregarán a la biblioteca</li>
+                    <li>El libro se almacenará según el modo configurado (local o nube)</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button 
+                onClick={closeHelpModal}
+                className="modal-ok-button"
+                type="button"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
