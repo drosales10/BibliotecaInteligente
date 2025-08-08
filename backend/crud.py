@@ -557,3 +557,9 @@ def get_drive_books(db: Session, category: str | None = None, search: str | None
                 'has_prev': False
             }
         }
+
+def get_books_by_category(db: Session, category: str):
+    """
+    Obtiene todos los libros de una categoría específica
+    """
+    return db.query(models.Book).filter(models.Book.category == category).all()

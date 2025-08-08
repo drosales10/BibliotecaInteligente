@@ -480,3 +480,75 @@
     background: linear-gradient(135deg, #434190 0%, #4c1d95 100%);
   }
 }
+
+/* Estilos para el contenedor del input de URL de Google Drive */
+.url-input-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+  border: 2px dashed transparent;
+  transition: all 0.3s ease;
+}
+
+.url-input-container input[type="text"] {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 16px;
+  box-sizing: border-box;
+  background-color: white;
+  color: #333;
+  transition: border-color 0.3s ease;
+}
+
+.url-input-container input[type="text"]:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.1);
+}
+
+.url-input-container input[type="text"]::placeholder {
+  color: #999;
+}
+
+.url-input-container .upload-button {
+  width: 100%;
+  padding: 12px 24px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.url-input-container .upload-button:hover:not(:disabled) {
+  background: var(--primary-color-dark);
+  transform: translateY(-1px);
+}
+
+.url-input-container .upload-button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Modo oscuro para el input */
+@media (prefers-color-scheme: dark) {
+  .url-input-container input[type="text"] {
+    background-color: #2a2a2a;
+    color: #fff;
+    border-color: #555;
+  }
+  
+  .url-input-container input[type="text"]::placeholder {
+    color: #888;
+  }
+}

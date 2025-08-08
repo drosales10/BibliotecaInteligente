@@ -42,6 +42,42 @@
   align-items: center;
 }
 
+/* Estilos para los botones de limpieza */
+.library-actions .cleanup-covers-container,
+.library-actions .cleanup-temp-files-container {
+  margin: 0;
+}
+
+/* Botón de búsqueda masiva de portadas */
+.bulk-search-covers-btn {
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
+}
+
+.bulk-search-covers-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0056b3, #004085);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+}
+
+.bulk-search-covers-btn:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 /* Controles responsivos */
 .controls-container {
   display: flex;
@@ -256,21 +292,329 @@
 }
 
 .delete-book-btn {
-  background:  var(--danger-color);
-  color: rgb(211, 206, 206);
-  padding: var(--space-3) var(--space-6);
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(220, 53, 69, 0.9);
+  color: white;
   border: none;
-  border-radius: var(--radius-md);
-  font-size: 1rem;
-  font-weight: bold;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
   cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  z-index: 10;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: 10px;
-  width: 5%;
-  height: 5%;
+}
+
+/* Estilos mejorados para botones de selección */
+
+/* Botón principal de modo selección */
+.selection-mode-btn {
+  background: linear-gradient(135deg, #6c757d, #495057);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 2px 4px rgba(108, 117, 125, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.selection-mode-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.selection-mode-btn:hover::before {
+  left: 100%;
+}
+
+.selection-mode-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #495057, #343a40);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(108, 117, 125, 0.3);
+}
+
+.selection-mode-btn.active {
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+}
+
+.selection-mode-btn.active:hover {
+  background: linear-gradient(135deg, #c82333, #a71e2a);
+  box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4);
+}
+
+.selection-mode-btn:disabled {
+  background: #adb5bd;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Botones de selección masiva */
+.select-all-btn, .deselect-all-btn {
+  background: linear-gradient(135deg, #17a2b8, #138496);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  box-shadow: 0 2px 4px rgba(23, 162, 184, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.select-all-btn::before, .deselect-all-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.select-all-btn:hover::before, .deselect-all-btn:hover::before {
+  left: 100%;
+}
+
+.select-all-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #138496, #117a8b);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(23, 162, 184, 0.3);
+}
+
+.deselect-all-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #138496, #117a8b);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(23, 162, 184, 0.3);
+}
+
+.select-all-btn:disabled, .deselect-all-btn:disabled {
+  background: #adb5bd;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Botón de eliminación masiva */
+.bulk-delete-btn {
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+  position: relative;
+  overflow: hidden;
+  animation: pulse-warning 2s infinite;
+}
+
+@keyframes pulse-warning {
+  0% {
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+  }
+  50% {
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.4), 0 0 0 4px rgba(220, 53, 69, 0.1);
+  }
+  100% {
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+  }
+}
+
+.bulk-delete-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.bulk-delete-btn:hover::before {
+  left: 100%;
+}
+
+.bulk-delete-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #c82333, #a71e2a);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4);
+  animation: none;
+}
+
+.bulk-delete-btn:disabled {
+  background: #adb5bd;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  animation: none;
+}
+
+/* Checkbox personalizado para selección de libros */
+.book-checkbox {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  z-index: 15;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid #6c757d;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.book-checkbox:checked {
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  border-color: #007bff;
+  transform: scale(1.1);
+}
+
+.book-checkbox:checked::after {
+  content: '✓';
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.book-checkbox:hover {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
+}
+
+.book-checkbox:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.3);
+}
+
+/* Indicador visual cuando el libro está seleccionado */
+.book-card.selected {
+  border: 2px solid #007bff;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.book-card.selected::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(0, 123, 255, 0.1), rgba(0, 86, 179, 0.1));
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.delete-book-btn:hover:not(:disabled) {
+  background: rgba(220, 53, 69, 1);
+  transform: scale(1.1);
+}
+
+.delete-book-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.edit-book-btn {
+  position: absolute;
+  top: 8px;
+  right: 48px;
+  background: rgba(40, 167, 69, 0.9);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 14px;
+  z-index: 10;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-book-btn:hover:not(:disabled) {
+  background: rgba(40, 167, 69, 1);
+  transform: scale(1.1);
+}
+
+.edit-book-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.search-cover-btn {
+  position: absolute;
+  top: 8px;
+  right: 88px;
+  background: rgba(0, 123, 255, 0.9);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 14px;
+  z-index: 10;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-cover-btn:hover:not(:disabled) {
+  background: rgba(0, 123, 255, 1);
+  transform: scale(1.1);
+}
+
+.search-cover-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Breakpoints responsivos */
@@ -301,6 +645,24 @@
     font-size: 0.9rem;
   }
   
+  /* Botones de selección en móvil */
+  .selection-mode-btn,
+  .select-all-btn,
+  .deselect-all-btn,
+  .bulk-delete-btn {
+    padding: 0.6rem 1rem;
+    font-size: 0.8rem;
+    border-radius: 6px;
+    gap: 0.3rem;
+  }
+  
+  .book-checkbox {
+    width: 18px;
+    height: 18px;
+    top: 10px;
+    left: 10px;
+  }
+  
   .controls-container {
     padding: 0.75rem;
     margin-bottom: 1rem;
@@ -326,6 +688,30 @@
   .view-pdf-btn, .read-link {
     padding: 0.6rem 0.8rem;
     font-size: 0.85rem;
+  }
+  
+  .edit-book-btn {
+    top: 6px;
+    right: 44px;
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+  
+  .search-cover-btn {
+    top: 6px;
+    right: 78px;
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+  
+  .delete-book-btn {
+    top: 6px;
+    right: 6px;
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
   }
   
   .modal-content {
@@ -362,6 +748,16 @@
   .library-actions button {
     flex: 1;
     min-width: 150px;
+  }
+  
+  /* Botones de selección en tablet */
+  .selection-mode-btn,
+  .select-all-btn,
+  .deselect-all-btn,
+  .bulk-delete-btn {
+    min-width: 140px;
+    padding: 0.7rem 1rem;
+    font-size: 0.85rem;
   }
   
   .controls-container {
@@ -473,6 +869,34 @@
   .book-card:hover {
     transform: none;
   }
+  
+  /* Botones de selección con movimiento reducido */
+  .selection-mode-btn,
+  .select-all-btn,
+  .deselect-all-btn,
+  .bulk-delete-btn,
+  .book-checkbox {
+    transition: none;
+  }
+  
+  .selection-mode-btn::before,
+  .select-all-btn::before,
+  .deselect-all-btn::before,
+  .bulk-delete-btn::before {
+    display: none;
+  }
+  
+  .bulk-delete-btn {
+    animation: none;
+  }
+  
+  .book-checkbox:checked {
+    transform: none;
+  }
+  
+  .book-card.selected {
+    transform: none;
+  }
 }
 
 /* Modo oscuro mejorado */
@@ -488,6 +912,59 @@
   
   .book-card:hover {
     box-shadow: var(--card-shadow-hover-dark);
+  }
+  
+  /* Botones de selección en modo oscuro */
+  .selection-mode-btn {
+    background: linear-gradient(135deg, #4a5568, #2d3748);
+  }
+  
+  .selection-mode-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #2d3748, #1a202c);
+  }
+  
+  .selection-mode-btn.active {
+    background: linear-gradient(135deg, #e53e3e, #c53030);
+  }
+  
+  .selection-mode-btn.active:hover {
+    background: linear-gradient(135deg, #c53030, #9b2c2c);
+  }
+  
+  .select-all-btn, .deselect-all-btn {
+    background: linear-gradient(135deg, #2b6cb0, #2c5282);
+  }
+  
+  .select-all-btn:hover:not(:disabled),
+  .deselect-all-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #2c5282, #1a365d);
+  }
+  
+  .bulk-delete-btn {
+    background: linear-gradient(135deg, #e53e3e, #c53030);
+  }
+  
+  .bulk-delete-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #c53030, #9b2c2c);
+  }
+  
+  .book-checkbox {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #718096;
+  }
+  
+  .book-checkbox:checked {
+    background: linear-gradient(135deg, #3182ce, #2c5282);
+    border-color: #3182ce;
+  }
+  
+  .book-checkbox:hover {
+    border-color: #3182ce;
+  }
+  
+  .book-card.selected {
+    border-color: #3182ce;
+    background: linear-gradient(135deg, rgba(49, 130, 206, 0.1), rgba(44, 82, 130, 0.1));
   }
 }
 
@@ -508,6 +985,22 @@
 .read-link:focus-visible {
   outline: 2px solid var(--primary-color);
   outline-offset: 2px;
+}
+
+/* Focus para botones de selección */
+.selection-mode-btn:focus-visible,
+.select-all-btn:focus-visible,
+.deselect-all-btn:focus-visible,
+.bulk-delete-btn:focus-visible {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(0, 123, 255, 0.2);
+}
+
+.book-checkbox:focus-visible {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(0, 123, 255, 0.2);
 }
 
 /* Estados de carga específicos por dispositivo */

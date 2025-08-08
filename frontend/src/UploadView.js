@@ -9,7 +9,8 @@ function UploadView() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedZip, setSelectedZip] = useState(null);
   const [selectedFolder, setSelectedFolder] = useState(null);
-  const [uploadMode, setUploadMode] = useState('single'); // 'single', 'bulk', o 'folder'
+  const [driveFolderUrl, setDriveFolderUrl] = useState('');
+  const [uploadMode, setUploadMode] = useState('single'); // 'single', 'bulk', 'folder', o 'drive-folder'
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(null);
@@ -366,6 +367,122 @@ function UploadView() {
     }
   };
 
+  const handleDriveFolderUpload = async () => {
+    if (!driveFolderUrl.trim()) {
+      setMessage('❌ Por favor, ingresa la URL de la carpeta de Google Drive.');
+      return;
+    }
+
+    // Verificar que estamos en modo nube
+    if (appMode !== 'drive') {
+      setMessage('❌ La carga desde Google Drive solo está disponible en modo nube. Cambia a modo nube para usar esta función.');
+      return;
+    }
+
+    // Verificar formato de URL
+    if (!driveFolderUrl.includes('drive.google.com')) {
+      setMessage('❌ Por favor, ingresa una URL válida de Google Drive.');
+      return;
+    }
+    
+    console.log('🚀 Iniciando carga desde carpeta de Google Drive...');
+    setIsLoading(true);
+    setProgress({ current: 0, total: 0, message: 'Conectando con Google Drive...' });
+
+    try {
+      // Verificar conexión con el backend
+      setProgress({ current: 0, total: 0, message: 'Verificando conexión con el servidor...' });
+      
+      const healthCheck = await fetch('http://localhost:8001/api/drive/status', {
+        method: 'GET',
+        headers: { 'Origin': 'http://localhost:3000' },
+        signal: AbortSignal.timeout(10000)
+      });
+      
+      if (!healthCheck.ok) {
+        throw new Error('El servidor no está respondiendo correctamente');
+      }
+
+      setProgress({ current: 0, total: 0, message: 'Procesando carpeta de Google Drive...' });
+
+      // Crear un AbortController para manejar timeouts
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 900000); // 15 minutos de timeout
+
+      const response = await fetch('http://localhost:8001/api/upload-drive-folder/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ folder_url: driveFolderUrl }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        
+        if (response.status === 503) {
+          throw new Error('Google Drive no está configurado correctamente. Verifica la configuración.');
+        } else if (response.status === 400) {
+          throw new Error('La URL de la carpeta no es válida o no es accesible.');
+        } else {
+          throw new Error(`Error al procesar la carpeta: ${response.status} ${response.statusText}`);
+        }
+      }
+      
+      setProgress({ current: 0, total: 0, message: 'Procesando archivos...' });
+      
+      const responseData = await response.json();
+      
+      if (responseData.successful > 0 || responseData.total_files > 0) {
+        setProgress({
+          current: responseData.successful,
+          total: responseData.total_files,
+          message: responseData.message
+        });
+        
+        // Crear mensaje detallado
+        let detailedMessage = `✅ ${responseData.message}`;
+        if (responseData.duplicates > 0) {
+          detailedMessage += `\n\n📋 Resumen:\n`;
+          detailedMessage += `• Libros procesados: ${responseData.successful}\n`;
+          detailedMessage += `• Errores: ${responseData.failed}\n`;
+          detailedMessage += `• Duplicados detectados: ${responseData.duplicates}`;
+        }
+        
+        setMessage(detailedMessage);
+        setDriveFolderUrl('');
+        setIsLoading(false);
+        
+        setTimeout(() => {
+          navigate('/', { replace: true });
+        }, 5000);
+      } else {
+        setMessage(`Error: ${responseData.detail || 'No se pudo procesar la carpeta de Google Drive.'}`);
+        setIsLoading(false);
+        setProgress(null);
+      }
+    } catch (error) {
+      console.error('Error durante la carga desde Google Drive:', error);
+      
+      if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+        setMessage('Error: La operación tardó demasiado tiempo. La carpeta puede ser muy grande o el servidor está ocupado.');
+      } else if (error.message.includes('Failed to fetch')) {
+        setMessage('Error de conexión: No se pudo conectar con el backend. Verifica que el servidor esté ejecutándose en http://localhost:8001');
+      } else if (error.message.includes('Google Drive no está configurado')) {
+        setMessage('Error: Google Drive no está configurado correctamente. Verifica que el archivo credentials.json esté presente y configurado.');
+      } else {
+        setMessage(`Error: ${error.message}`);
+      }
+      
+      setIsLoading(false);
+      setProgress(null);
+    }
+  };
+
   const handleUpload = () => {
     if (uploadMode === 'single') {
       handleSingleUpload();
@@ -373,6 +490,8 @@ function UploadView() {
       handleBulkUpload();
     } else if (uploadMode === 'folder') {
       handleFolderUpload();
+    } else if (uploadMode === 'drive-folder') {
+      handleDriveFolderUpload();
     }
   };
 
@@ -406,6 +525,12 @@ function UploadView() {
           onClick={() => setUploadMode('folder')}
         >
           📁 Seleccionar Carpeta
+        </button>
+        <button 
+          className={`mode-button ${uploadMode === 'drive-folder' ? 'active' : ''}`}
+          onClick={() => setUploadMode('drive-folder')}
+        >
+          💾 Google Drive
         </button>
       </div>
 
@@ -471,7 +596,7 @@ function UploadView() {
             </div>
           </div>
         </div>
-      ) : (
+      ) : uploadMode === 'folder' ? (
         <div className="folder-upload-section">
           
           <div className="bulk-info">
@@ -525,14 +650,53 @@ function UploadView() {
             
           
         </div>
+      ) : (
+        <div className="drive-folder-upload-section">
+          <div className="bulk-info">
+            <small>
+              Ingresa la URL de una carpeta de Google Drive para cargar todos los libros de forma masiva.
+            </small>
+            <div className="help-section">
+              <button 
+                onClick={openHelpModal}
+                className="help-button"
+                type="button"
+                title="Ver instrucciones detalladas"
+              >
+                ❓ Ayuda
+              </button>
+            </div>
+          </div>
+          <div className="upload-container">
+            <div className="url-input-container">
+              <input 
+                type="text" 
+                placeholder="https://drive.google.com/drive/folders/..." 
+                value={driveFolderUrl} 
+                onChange={(e) => setDriveFolderUrl(e.target.value)} 
+                onPaste={(e) => e.stopPropagation()}
+                onDrop={(e) => e.stopPropagation()}
+                onDragOver={(e) => e.stopPropagation()}
+              />
+              <button 
+                onClick={handleDriveFolderUpload} 
+                className="upload-button" 
+                disabled={isLoading || !driveFolderUrl.trim()}
+              >
+                {isLoading ? 'Procesando...' : 'Analizar y Guardar Libros de Google Drive'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <button 
         onClick={handleUpload} 
         className="upload-button" 
         disabled={isLoading || 
-                 (!selectedFile && !selectedZip && !selectedFolder) ||
-                 (uploadMode === 'folder' && appMode !== 'local')}
+                 (!selectedFile && !selectedZip && !selectedFolder && !driveFolderUrl.trim()) ||
+                 (uploadMode === 'folder' && appMode !== 'local') ||
+                 (uploadMode === 'drive-folder' && appMode !== 'drive')}
       >
         {isLoading ? 'Procesando...' : `Analizar y Guardar ${uploadMode === 'single' ? 'Libro' : 'Libros'}`}
       </button>
@@ -594,6 +758,28 @@ function UploadView() {
                     <li>Los duplicados no se agregarán a la biblioteca</li>
                     <li>Los libros se almacenarán localmente en el servidor</li>
                     <li>Esta opción requiere un navegador moderno que soporte la API de directorios</li>
+                  </ul>
+                </div>
+              ) : uploadMode === 'drive-folder' ? (
+                <div>
+                  <h4>💾 Carga desde Google Drive (Modo Nube)</h4>
+                  <ul>
+                    <li>Ingresa la URL de una carpeta pública de Google Drive</li>
+                    <li>La aplicación buscará recursivamente en todos los subdirectorios</li>
+                    <li>Se procesarán los archivos uno por uno para evitar límites de tamaño</li>
+                    <li>Cada libro será analizado con IA para extraer metadatos</li>
+                    <li>Se detectarán automáticamente duplicados por nombre de archivo, título y autor</li>
+                    <li>Los duplicados no se agregarán a la biblioteca</li>
+                    <li>Los libros se almacenarán en Google Drive organizados por categorías y letras</li>
+                    <li>Las portadas se guardarán en la carpeta @covers de Google Drive</li>
+                    <li>Esta opción requiere que Google Drive esté configurado correctamente</li>
+                    <li>La carpeta de Google Drive debe ser pública o accesible</li>
+                  </ul>
+                  <h5>Formatos de URL soportados:</h5>
+                  <ul>
+                    <li>https://drive.google.com/drive/folders/[ID]</li>
+                    <li>https://drive.google.com/open?id=[ID]</li>
+                    <li>https://drive.google.com/file/d/[ID]/view</li>
                   </ul>
                 </div>
               ) : (

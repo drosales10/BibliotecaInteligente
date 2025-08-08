@@ -21,7 +21,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuración de Google Drive API
-SCOPES = ['https://www.googleapis.com/auth/drive.file']
+SCOPES = [
+    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/drive.readonly'
+]
 CREDENTIALS_FILE = 'credentials.json'
 TOKEN_FILE = 'token.json'
 
@@ -986,60 +989,295 @@ class GoogleDriveManager:
             return folder.get('id')
             
         except Exception as e:
-            error_msg = str(e)
-            if "WRONG_VERSION_NUMBER" in error_msg or "SSL" in error_msg.upper():
-                logger.warning("Error SSL detectado en _get_or_create_covers_folder, intentando con configuración alternativa...")
+            logger.error(f"❌ Error al obtener/crear carpeta de portadas: {e}")
+            return None
+
+    def extract_folder_id_from_url(self, drive_url):
+        """
+        Extrae el ID de carpeta de una URL pública de Google Drive
+        """
+        try:
+            # Patrones comunes de URLs de Google Drive
+            patterns = [
+                r'drive\.google\.com/drive/folders/([a-zA-Z0-9_-]+)',
+                r'drive\.google\.com/open\?id=([a-zA-Z0-9_-]+)',
+                r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)',
+                r'id=([a-zA-Z0-9_-]+)'
+            ]
+            
+            import re
+            for pattern in patterns:
+                match = re.search(pattern, drive_url)
+                if match:
+                    folder_id = match.group(1)
+                    logger.info(f"✅ ID de carpeta extraído: {folder_id}")
+                    return folder_id
+            
+            logger.error(f"❌ No se pudo extraer ID de carpeta de la URL: {drive_url}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Error al extraer ID de carpeta: {e}")
+            return None
+
+    @retry_on_error()
+    def list_public_folder_contents(self, folder_url):
+        """
+        Lista el contenido de una carpeta pública de Google Drive (incluyendo carpetas de otros usuarios)
+        """
+        try:
+            folder_id = self.extract_folder_id_from_url(folder_url)
+            if not folder_id:
+                return {"success": False, "error": "No se pudo extraer el ID de carpeta de la URL"}
+            
+            # Obtener información de la carpeta
+            try:
+                folder_info = self.service.files().get(
+                    fileId=folder_id,
+                    fields='id,name,mimeType,webViewLink,owners'
+                ).execute()
+                
+                if folder_info.get('mimeType') != 'application/vnd.google-apps.folder':
+                    return {"success": False, "error": "La URL no corresponde a una carpeta de Google Drive"}
+                
+                # Verificar si la carpeta es accesible (pública o compartida)
+                owners = folder_info.get('owners', [])
+                if owners:
+                    owner_email = owners[0].get('emailAddress', '')
+                    print(f"📁 Carpeta de usuario: {owner_email}")
+                
+            except HttpError as e:
+                if e.resp.status == 404:
+                    return {"success": False, "error": "La carpeta no existe o no es accesible"}
+                elif e.resp.status == 403:
+                    return {"success": False, "error": "No tienes permisos para acceder a esta carpeta. Verifica que sea pública."}
+                else:
+                    raise e
+            
+            # Listar contenido de la carpeta
+            files = []
+            page_token = None
+            
+            while True:
                 try:
-                    # Recrear el servicio con configuración SSL alternativa
-                    from google.oauth2.credentials import Credentials
-                    from google_auth_oauthlib.flow import InstalledAppFlow
-                    import urllib3
-                    import ssl
-                    import httplib2
-                    
-                    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                    
-                    # Crear contexto SSL personalizado
-                    ssl_context = ssl.create_default_context()
-                    ssl_context.check_hostname = False
-                    ssl_context.verify_mode = ssl.CERT_NONE
-                    
-                    # Configurar HTTP con contexto SSL personalizado
-                    http = httplib2.Http(timeout=30, disable_ssl_certificate_validation=True)
-                    
-                    # Recrear credenciales y servicio
-                    if os.path.exists(TOKEN_FILE):
-                        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-                    else:
-                        flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-                        creds = flow.run_local_server(port=0)
-                        with open(TOKEN_FILE, 'w') as token:
-                            token.write(creds.to_json())
-                    
-                    # Recrear servicio con configuración SSL alternativa
-                    self.service = build('drive', 'v3', credentials=creds, http=http)
-                    
-                    # Reintentar la operación
-                    results = self.service.files().list(q=query, spaces='drive', fields='files(id,name)').execute()
-                    files = results.get('files', [])
-                    
-                    if files:
-                        return files[0]['id']
-                    
-                    folder = self.service.files().create(
-                        body=folder_metadata,
-                        fields='id,name'
+                    results = self.service.files().list(
+                        q=f"'{folder_id}' in parents and trashed=false",
+                        spaces='drive',
+                        fields='nextPageToken, files(id, name, mimeType, size, webViewLink, webContentLink, owners)',
+                        pageToken=page_token
                     ).execute()
                     
-                    logger.info(f"✅ Carpeta de portadas creada con configuración SSL alternativa: {folder.get('name')} (ID: {folder.get('id')})")
-                    return folder.get('id')
+                    items = results.get('files', [])
+                    files.extend(items)
                     
-                except Exception as ssl_retry_error:
-                    logger.error(f"❌ Error persistente SSL en _get_or_create_covers_folder: {ssl_retry_error}")
-                    return None
-            else:
-                logger.error(f"❌ Error al crear carpeta de portadas: {e}")
-                return None
+                    page_token = results.get('nextPageToken', None)
+                    if page_token is None:
+                        break
+                        
+                except HttpError as e:
+                    if e.resp.status == 403:
+                        logger.error(f"❌ Error de permisos al listar contenido: {e}")
+                        return {"success": False, "error": "No tienes permisos para listar el contenido de esta carpeta. Verifica que sea pública."}
+                    else:
+                        logger.error(f"❌ Error al listar contenido de carpeta: {e}")
+                        break
+            
+            logger.info(f"✅ Contenido de carpeta listado: {len(files)} elementos encontrados")
+            return {
+                "success": True,
+                "folder_info": folder_info,
+                "files": files,
+                "total_files": len(files)
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error al listar carpeta pública: {e}")
+            return {"success": False, "error": f"Error al listar carpeta: {str(e)}"}
+
+    @retry_on_error()
+    def download_file_from_drive(self, file_id, temp_dir):
+        """
+        Descarga un archivo desde Google Drive a un directorio temporal
+        """
+        try:
+            # Obtener información del archivo
+            file_info = self.service.files().get(
+                fileId=file_id,
+                fields='id,name,mimeType,size'
+            ).execute()
+            
+            file_name = file_info.get('name', 'unknown_file')
+            file_size = int(file_info.get('size', 0))
+            
+            # Crear ruta temporal
+            temp_file_path = os.path.join(temp_dir, file_name)
+            
+            # Descargar archivo
+            request = self.service.files().get_media(fileId=file_id)
+            
+            with open(temp_file_path, 'wb') as f:
+                downloader = MediaIoBaseDownload(f, request)
+                done = False
+                while done is False:
+                    status, done = downloader.next_chunk()
+                    if status:
+                        logger.info(f"Descargando {file_name}: {int(status.progress() * 100)}%")
+            
+            logger.info(f"✅ Archivo descargado: {file_name} ({file_size} bytes)")
+            return {
+                "success": True,
+                "file_path": temp_file_path,
+                "file_name": file_name,
+                "file_size": file_size
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error al descargar archivo {file_id}: {e}")
+            return {"success": False, "error": str(e)}
+
+    def process_public_folder_recursively(self, folder_url, temp_dir):
+        """
+        Procesa recursivamente una carpeta pública de Google Drive (incluyendo carpetas de otros usuarios)
+        """
+        try:
+            # Listar contenido de la carpeta
+            folder_result = self.list_public_folder_contents(folder_url)
+            if not folder_result["success"]:
+                return folder_result
+            
+            all_files = []
+            processed_folders = set()
+            
+            def process_folder_recursive(folder_id, folder_name="", depth=0):
+                """Función recursiva para procesar carpetas"""
+                if folder_id in processed_folders:
+                    return
+                
+                processed_folders.add(folder_id)
+                indent = "  " * depth
+                logger.info(f"{indent}📁 Procesando carpeta: {folder_name}")
+                
+                # Listar contenido de la carpeta
+                page_token = None
+                while True:
+                    try:
+                        results = self.service.files().list(
+                            q=f"'{folder_id}' in parents and trashed=false",
+                            spaces='drive',
+                            fields='nextPageToken, files(id, name, mimeType, size, webViewLink, owners)',
+                            pageToken=page_token
+                        ).execute()
+                        
+                        items = results.get('files', [])
+                        
+                        for item in items:
+                            item_name = item.get('name', '')
+                            item_id = item.get('id')
+                            mime_type = item.get('mimeType', '')
+                            
+                            if mime_type == 'application/vnd.google-apps.folder':
+                                # Es una subcarpeta, procesar recursivamente
+                                logger.info(f"{indent}📁 Subcarpeta encontrada: {item_name}")
+                                try:
+                                    process_folder_recursive(item_id, item_name, depth + 1)
+                                except Exception as e:
+                                    logger.warning(f"{indent}⚠️ No se pudo acceder a subcarpeta {item_name}: {e}")
+                            else:
+                                # Es un archivo, verificar si es un libro
+                                if self.is_valid_book_file(item_name):
+                                    logger.info(f"{indent}📄 Libro encontrado: {item_name}")
+                                    all_files.append({
+                                        "id": item_id,
+                                        "name": item_name,
+                                        "size": item.get('size', 0),
+                                        "web_link": item.get('webViewLink'),
+                                        "folder_path": folder_name
+                                    })
+                                else:
+                                    logger.info(f"{indent}❌ Archivo ignorado: {item_name}")
+                        
+                        page_token = results.get('nextPageToken', None)
+                        if page_token is None:
+                            break
+                            
+                    except HttpError as e:
+                        if e.resp.status == 403:
+                            logger.warning(f"{indent}⚠️ No se pudo acceder al contenido de {folder_name}: Permisos insuficientes")
+                            break
+                        else:
+                            logger.error(f"{indent}❌ Error al listar contenido: {e}")
+                            break
+            
+            # Procesar la carpeta raíz
+            folder_id = self.extract_folder_id_from_url(folder_url)
+            folder_info = folder_result["folder_info"]
+            process_folder_recursive(folder_id, folder_info.get('name', 'Carpeta raíz'))
+            
+            logger.info(f"✅ Procesamiento recursivo completado: {len(all_files)} libros encontrados")
+            return {
+                "success": True,
+                "folder_info": folder_info,
+                "books": all_files,
+                "total_books": len(all_files)
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error en procesamiento recursivo: {e}")
+            return {"success": False, "error": f"Error en procesamiento: {str(e)}"}
+
+    def is_valid_book_file(self, filename):
+        """
+        Verifica si un archivo es un libro válido (PDF o EPUB)
+        """
+        valid_extensions = {'.pdf', '.epub'}
+        file_ext = os.path.splitext(filename.lower())[1]
+        return file_ext in valid_extensions
+
+    def check_folder_accessibility(self, folder_url):
+        """
+        Verifica si una carpeta es accesible públicamente
+        """
+        try:
+            folder_id = self.extract_folder_id_from_url(folder_url)
+            if not folder_id:
+                return {"success": False, "error": "No se pudo extraer el ID de carpeta de la URL"}
+            
+            # Intentar obtener información básica de la carpeta
+            try:
+                folder_info = self.service.files().get(
+                    fileId=folder_id,
+                    fields='id,name,mimeType,webViewLink,owners,permissions'
+                ).execute()
+                
+                if folder_info.get('mimeType') != 'application/vnd.google-apps.folder':
+                    return {"success": False, "error": "La URL no corresponde a una carpeta de Google Drive"}
+                
+                # Verificar propietario
+                owners = folder_info.get('owners', [])
+                owner_email = owners[0].get('emailAddress', '') if owners else 'Desconocido'
+                
+                # Verificar permisos
+                permissions = folder_info.get('permissions', [])
+                is_public = any(perm.get('type') == 'anyone' for perm in permissions)
+                
+                return {
+                    "success": True,
+                    "folder_info": folder_info,
+                    "owner": owner_email,
+                    "is_public": is_public,
+                    "accessible": True
+                }
+                
+            except HttpError as e:
+                if e.resp.status == 404:
+                    return {"success": False, "error": "La carpeta no existe"}
+                elif e.resp.status == 403:
+                    return {"success": False, "error": "La carpeta no es accesible públicamente. Verifica que esté compartida como pública."}
+                else:
+                    return {"success": False, "error": f"Error al acceder a la carpeta: {e}"}
+                    
+        except Exception as e:
+            return {"success": False, "error": f"Error al verificar accesibilidad: {str(e)}"}
 
 # Instancia global del gestor
 drive_manager = None

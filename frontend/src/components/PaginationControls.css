@@ -230,4 +230,63 @@
 [data-theme="dark"] .per-page-select:focus {
   border-color: var(--primary-color-dark);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+/* Forzar colores en modo oscuro para el paginador */
+.dark-mode .pagination-controls {
+  background-color: #1e293b !important;
+  color: #f7fafc !important;
+}
+
+.dark-mode .pagination-text {
+  color: #cbd5e1 !important;
+}
+
+.dark-mode .pagination-btn {
+  background-color: #334155 !important;
+  border-color: #475569 !important;
+  color: #f7fafc !important;
+}
+
+.dark-mode .pagination-btn:hover:not(:disabled) {
+  background-color: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+}
+
+.dark-mode .pagination-btn:disabled {
+  background-color: #1e293b !important;
+  color: #64748b !important;
+  border-color: #334155 !important;
+}
+
+.dark-mode .pagination-btn.pagination-active {
+  background-color: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+}
+
+.dark-mode .per-page-label {
+  color: #cbd5e1 !important;
+}
+
+.dark-mode .per-page-select {
+  background-color: #334155 !important;
+  border-color: #475569 !important;
+  color: #f7fafc !important;
+}
+
+.dark-mode .per-page-select:hover {
+  border-color: #3b82f6 !important;
+}
+
+.dark-mode .per-page-select:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+}
+
+/* Estilos para las opciones del select en modo oscuro */
+.dark-mode .per-page-select option {
+  background-color: #334155 !important;
+  color: #f7fafc !important;
 } 

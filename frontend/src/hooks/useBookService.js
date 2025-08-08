@@ -173,6 +173,105 @@ export const useBookService = () => {
     }
   }, [isLocalMode, isDriveMode]);
 
+  const updateBook = useCallback(async (bookId, bookData) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/books/${bookId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bookData)
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al actualizar el libro');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error en updateBook:', error);
+      throw error;
+    }
+  }, []);
+
+  const updateBookCover = useCallback(async (bookId, coverFile) => {
+    try {
+      const formData = new FormData();
+      formData.append('cover_file', coverFile);
+
+      const response = await fetch(`${BACKEND_URL}/api/books/${bookId}/update-cover`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al actualizar la portada');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error en updateBookCover:', error);
+      throw error;
+    }
+  }, []);
+
+  const createCategory = useCallback(async (categoryName) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/categories/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: categoryName })
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al crear la categoría');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error en createCategory:', error);
+      throw error;
+    }
+  }, []);
+
+  const openLocalBook = useCallback(async (bookId) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/books/${bookId}/open`);
+      
+      if (!response.ok) {
+        throw new Error('Error al abrir el libro');
+      }
+
+      return await response.blob();
+    } catch (error) {
+      console.error('Error en openLocalBook:', error);
+      throw error;
+    }
+  }, []);
+
+  const cleanupTempFiles = useCallback(async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/cleanup-temp-files`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al limpiar archivos temporales');
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Error limpiando archivos temporales:', error);
+      throw error;
+    }
+  }, []);
+
   return {
     appMode,
     isLocalMode,
@@ -182,5 +281,10 @@ export const useBookService = () => {
     deleteBook,
     getBookContent,
     getCategories,
+    updateBook,
+    updateBookCover,
+    createCategory,
+    openLocalBook,
+    cleanupTempFiles,
   };
 }; 

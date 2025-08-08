@@ -15,6 +15,9 @@ import ProgressIndicator, { IndeterminateProgress } from './components/ProgressI
 import AdvancedSearchBar from './components/AdvancedSearchBar';
 import SearchFilters from './components/SearchFilters';
 import FilterChips from './components/FilterChips';
+import BookEditModal from './components/BookEditModal';
+import CleanupCoversButton from './components/CleanupCoversButton';
+import CleanupTempFilesButton from './components/CleanupTempFilesButton';
 import './LibraryView.css';
 
 
@@ -159,10 +162,15 @@ function LibraryView() {
   const [selectedBooks, setSelectedBooks] = useState(new Set());
   const [books, setBooks] = useState([]);
   const [error, setError] = useState(null);
+  const [editModal, setEditModal] = useState({ 
+    isOpen: false, 
+    book: null 
+  });
+  const [categories, setCategories] = useState([]);
   const location = useLocation();
 
   // Usar los nuevos hooks
-  const { getBooks, deleteBook, appMode } = useBookService();
+  const { getBooks, deleteBook, appMode, getCategories } = useBookService();
   const { isLocalMode, isDriveMode } = useAppMode();
   
   // Hook de búsqueda avanzada
@@ -289,6 +297,11 @@ function LibraryView() {
       console.error('Error al cargar libros:', err);
     }
   }, [getBooks, searchParams, searchTerm, filters, isAdvancedMode, isLocalMode, isDriveMode, appMode, currentPage, perPage, updatePaginationInfo, resetPagination]);
+
+  // Función para actualizar libros manualmente
+  const refreshBooks = useCallback(() => {
+    fetchBooks();
+  }, [fetchBooks]);
 
   // Efecto para cargar libros al montar el componente
   useEffect(() => {
@@ -488,29 +501,16 @@ function LibraryView() {
   // Función para manejar la visualización de PDF
   const handleViewPDF = async (book) => {
     try {
-      // Primero intentar abrir desde local si existe el archivo
-      if (book.file_path && book.source === 'local' && !book.synced_to_drive) {
-        // Intentar abrir el PDF local usando el endpoint correcto
-        const localUrl = `http://localhost:8001/api/books/download/${book.id}`;
-        window.open(localUrl, '_blank');
+      // Verificar si el libro está en modo local o nube
+      if (book.source === 'local' || (!book.synced_to_drive && !book.drive_file_id)) {
+        // Libro local - abrir en nueva pestaña
+        const url = `http://localhost:8001/api/books/download/${book.id}`;
+        window.open(url, '_blank');
         return;
-      }
-      
-      // Si está en Drive o sincronizado, intentar desde Drive
-      if (book.source === 'drive' || book.synced_to_drive) {
-        // Descargar desde Google Drive
-        const response = await fetch(`http://localhost:8001/api/drive/books/${book.id}/content`);
-        if (response.ok) {
-          const result = await response.json();
-          if (result.file_path) {
-            // Abrir el archivo descargado temporalmente
-            window.open(`http://localhost:8001/temp_downloads/${result.file_path}`, '_blank');
-          } else {
-            alert('No se pudo obtener el archivo desde Google Drive');
-          }
-        } else {
-          alert('Error al obtener el archivo desde Google Drive');
-        }
+      } else if (book.source === 'drive' || book.synced_to_drive || book.drive_file_id) {
+        // Libro en Google Drive - abrir en nueva pestaña
+        const url = `http://localhost:8001/api/drive/books/${book.id}/content`;
+        window.open(url, '_blank');
         return;
       }
       
@@ -523,12 +523,133 @@ function LibraryView() {
     }
   };
 
+  const handleEditBook = (book) => {
+    setEditModal({ isOpen: true, book });
+  };
+
+  const handleCloseEditModal = () => {
+    setEditModal({ isOpen: false, book: null });
+  };
+
+  const handleBookUpdate = (updatedBook) => {
+    setBooks(prevBooks => 
+      prevBooks.map(book => 
+        book.id === updatedBook.id ? updatedBook : book
+      )
+    );
+  };
+
+  const handleCategoryCreate = (newCategory) => {
+    setCategories(prev => [...prev, newCategory]);
+  };
+
+  const handleSearchCoverOnline = async (book) => {
+    try {
+      console.log('Buscando portada online para:', book.title);
+      
+      const response = await fetch(`http://localhost:8001/api/books/${book.id}/search-cover-online`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        console.log('Portada encontrada:', data.cover_url);
+        // Actualizar la lista de libros para reflejar el cambio
+        refreshBooks();
+        alert(`✅ Portada encontrada y actualizada: ${data.cover_url}`);
+      } else {
+        console.error('Error al buscar portada:', data.message);
+        alert(`❌ No se pudo encontrar portada online: ${data.message}`);
+      }
+    } catch (error) {
+      console.error('Error al buscar portada online:', error);
+      alert('❌ Error al buscar portada online. Verifica la conexión.');
+    }
+  };
+
+  const handleBulkSearchCovers = async () => {
+    try {
+      console.log('Iniciando búsqueda masiva de portadas para', safeBooks.length, 'libros');
+      
+      // Obtener IDs de libros que no tienen portada o tienen portadas genéricas
+      const booksWithoutCovers = safeBooks.filter(book => 
+        !book.cover_image_url || 
+        book.cover_image_url.includes('generic') ||
+        book.cover_image_url.includes('placeholder')
+      );
+      
+      if (booksWithoutCovers.length === 0) {
+        alert('✅ Todos los libros ya tienen portadas. No es necesario buscar nuevas portadas.');
+        return;
+      }
+      
+      const bookIds = booksWithoutCovers.map(book => book.id);
+      
+      const response = await fetch(`http://localhost:8001/api/books/bulk-search-covers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bookIds),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        console.log('Búsqueda masiva completada:', data);
+        // Actualizar la lista de libros para reflejar los cambios
+        refreshBooks();
+        alert(`✅ Búsqueda masiva completada:\n${data.successful} portadas encontradas\n${data.failed} no encontradas`);
+      } else {
+        console.error('Error en búsqueda masiva:', data.message);
+        alert(`❌ Error en búsqueda masiva: ${data.message}`);
+      }
+    } catch (error) {
+      console.error('Error al realizar búsqueda masiva:', error);
+      alert('❌ Error al realizar búsqueda masiva. Verifica la conexión.');
+    }
+  };
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const cats = await getCategories();
+      setCategories(cats);
+    } catch (error) {
+      console.error('Error cargando categorías:', error);
+    }
+  }, [getCategories]);
+
+  // Cargar categorías al montar el componente
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
   return (
     <div className="library-container">
       <div className="library-header">
         
         <div className="library-actions">
           <BulkSyncToDriveButton books={safeBooks} onSyncComplete={handleSyncComplete} />
+          <CleanupCoversButton onCleanupComplete={() => console.log('Portadas limpiadas')} />
+          <CleanupTempFilesButton onCleanupComplete={(result) => {
+            console.log('Archivos temporales limpiados:', result);
+            // Opcional: mostrar notificación más detallada
+            if (result.total_files_deleted > 0) {
+              alert(`Limpieza completada:\n${result.total_files_deleted} archivos eliminados\n${result.total_size_freed_mb} MB liberados`);
+            }
+          }} />
+          <button 
+            className="bulk-search-covers-btn"
+            onClick={handleBulkSearchCovers}
+            disabled={safeBooks.length === 0}
+            title="Buscar portadas online para todos los libros"
+          >
+            🔍 Buscar Portadas
+          </button>
           <button 
             className={`selection-mode-btn ${selectionMode ? 'active' : ''}`}
             onClick={toggleSelectionMode}
@@ -641,6 +762,22 @@ function LibraryView() {
               >
                 {deletingBookId === book.id ? '⋯' : '×'}
               </button>
+              <button 
+                onClick={() => handleEditBook(book)} 
+                className="edit-book-btn" 
+                title="Editar libro"
+                disabled={selectionMode}
+              >
+                ✏️
+              </button>
+              <button 
+                onClick={() => handleSearchCoverOnline(book)} 
+                className="search-cover-btn" 
+                title="Buscar portada online"
+                disabled={selectionMode}
+              >
+                🔍
+              </button>
               <BookCover 
                 src={book.cover_image_url || ''}
                 alt={`Portada de ${book.title}`}
@@ -699,7 +836,16 @@ function LibraryView() {
         bookTitle={deleteModal.bookTitle}
         isDeleting={deletingBookId !== null}
         isMultiple={deleteModal.isMultiple}
-        selectedCount={deleteModal.selectedIds?.length || 0}
+        selectedCount={deleteModal.selectedIds.length}
+      />
+
+      <BookEditModal
+        isOpen={editModal.isOpen}
+        onClose={handleCloseEditModal}
+        book={editModal.book}
+        onUpdate={handleBookUpdate}
+        categories={categories}
+        onCategoryCreate={handleCategoryCreate}
       />
     </div>
   );
