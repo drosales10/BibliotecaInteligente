@@ -30,3 +30,7 @@ __pycache__/
 # Archivos del sistema operativo
 .DS_Store
 Thumbs.db
+
+backend/credentials.json
+backend/temp_folder_upload/
+backend/token.json
