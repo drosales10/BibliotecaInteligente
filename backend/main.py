@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Response, Query
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Response, Query, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -745,7 +745,19 @@ def delete_multiple_books(book_ids: dict, db: Session = Depends(get_db)):
     
     for book_id in ids_to_delete:
         try:
-            book = crud.delete_book(db, book_id=book_id)
+            # Convertir book_id a entero
+            try:
+                book_id_int = int(book_id)
+            except (ValueError, TypeError):
+                failed_deletions.append(f"ID de libro inválido: {book_id}")
+                continue
+            
+            # Obtener el libro de la base de datos
+            book = crud.get_book(db, book_id_int)
+            if not book:
+                failed_deletions.append(f"Libro con ID {book_id} no encontrado en la base de datos")
+                continue
+            
             if book:
                 deleted_books.append(book.title)
             else:
@@ -2266,6 +2278,98 @@ async def upload_book_to_drive(book_file: UploadFile = File(...), db: Session = 
         print(f"❌ Error al subir libro a Drive: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error al subir libro a Drive: {str(e)}")
 
+@app.delete("/api/drive/books/bulk")
+def delete_multiple_drive_books(book_ids: dict, db: Session = Depends(get_db)):
+    """
+    Elimina múltiples libros de Google Drive
+    """
+    try:
+        from google_drive_manager import get_drive_manager
+        drive_manager = get_drive_manager()
+        
+        if not drive_manager.service:
+            raise HTTPException(status_code=503, detail="Google Drive no está configurado")
+        
+        # Validar que book_ids sea un diccionario y contenga la clave 'book_ids'
+        if not isinstance(book_ids, dict):
+            raise HTTPException(status_code=400, detail="Formato de datos inválido. Se espera un diccionario con 'book_ids'")
+        
+        ids_to_delete = book_ids.get('book_ids', [])
+        if not ids_to_delete:
+            return {
+                "message": "No se proporcionaron IDs de libros para eliminar",
+                "deleted_count": 0,
+                "failed_count": 0,
+                "failed_deletions": []
+            }
+        
+        if not isinstance(ids_to_delete, list):
+            raise HTTPException(status_code=400, detail="Los IDs de libros deben ser una lista")
+        
+        deleted_count = 0
+        failed_deletions = []
+        
+        for book_id in ids_to_delete:
+            try:
+                # Convertir book_id a entero
+                try:
+                    book_id_int = int(book_id)
+                except (ValueError, TypeError):
+                    failed_deletions.append(f"ID de libro inválido: {book_id}")
+                    continue
+                
+                # Obtener el libro de la base de datos
+                book = crud.get_book(db, book_id_int)
+                if not book:
+                    failed_deletions.append(f"Libro con ID {book_id} no encontrado en la base de datos")
+                    continue
+                
+                # Verificar que el libro está en Google Drive
+                if not book.drive_file_id:
+                    failed_deletions.append(f"Libro '{book.title}' no está en Google Drive")
+                    continue
+                
+                # Eliminar de Google Drive
+                result = drive_manager.delete_book_from_drive(book.drive_file_id)
+                
+                if result['success']:
+                    # Eliminar portada de Google Drive si existe
+                    if book.cover_image_url and book.cover_image_url.startswith('http'):
+                        try:
+                            cover_result = drive_manager.delete_cover_from_drive(book.cover_image_url)
+                            if cover_result['success']:
+                                logger.info(f"Portada eliminada de Google Drive: {book.title}")
+                        except Exception as e:
+                            logger.warning(f"Error al eliminar portada de Google Drive: {e}")
+                    
+                    # Eliminar de la base de datos
+                    crud.delete_book(db, book.id)
+                    deleted_count += 1
+                    logger.info(f"Libro eliminado exitosamente de Google Drive y base de datos: {book.title}")
+                else:
+                    # Si el archivo no existe en Drive (error 404), eliminar de la base de datos local
+                    if "File not found" in result['error'] or "404" in result['error']:
+                        crud.delete_book(db, book.id)
+                        deleted_count += 1
+                        logger.info(f"Archivo no encontrado en Drive, eliminado de base de datos: {book.title}")
+                    else:
+                        failed_deletions.append(f"Error al eliminar '{book.title}' de Google Drive: {result['error']}")
+                        
+            except Exception as e:
+                failed_deletions.append(f"Error al procesar libro con ID {book_id}: {str(e)}")
+        
+        return {
+            "message": f"Eliminación masiva completada",
+            "deleted_count": deleted_count,
+            "failed_count": len(failed_deletions),
+            "failed_deletions": failed_deletions
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error en eliminación masiva: {str(e)}")
+
 @app.delete("/api/drive/books/{book_id}")
 def delete_book_from_drive(book_id: str, db: Session = Depends(get_db)):
     """
@@ -2377,26 +2481,15 @@ def get_drive_book_content(book_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error al obtener contenido del libro: {str(e)}")
 
 @app.get("/api/drive/categories/")
-def get_drive_categories():
+def get_drive_categories(db: Session = Depends(get_db)):
     """
-    Obtiene las categorías disponibles en Google Drive
+    Obtiene las categorías disponibles en Google Drive desde la base de datos
     """
     try:
-        from google_drive_manager import get_drive_manager
-        drive_manager = get_drive_manager()
-        
-        if not drive_manager.service:
-            raise HTTPException(status_code=503, detail="Google Drive no está configurado")
-        
-        # Obtener carpetas de categorías desde Drive
-        query = f"mimeType='application/vnd.google-apps.folder' and '{drive_manager.root_folder_id}' in parents and trashed=false"
-        results = drive_manager.service.files().list(q=query, spaces='drive', fields='files(name)').execute()
-        
-        categories = [file['name'] for file in results.get('files', [])]
+        # Obtener categorías de libros que están en Google Drive desde la base de datos
+        categories = crud.get_drive_categories(db)
         return categories
         
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener categorías de Drive: {str(e)}")
 
@@ -2421,7 +2514,7 @@ def sync_book_to_drive(book_data: dict, db: Session = Depends(get_db)):
             raise HTTPException(status_code=400, detail="Faltan datos requeridos para la sincronización")
         
         # Obtener el libro de la base de datos local
-        book = crud.get_book(db, book_id=book_id)
+        book = crud.get_book(db, book_id)
         if not book:
             raise HTTPException(status_code=404, detail="Libro no encontrado en la base de datos local")
         
@@ -2995,7 +3088,7 @@ async def search_cover_online(
     """
     try:
         # Obtener el libro de la base de datos
-        book = crud.get_book(db, book_id=book_id)
+        book = crud.get_book(db, book_id)
         if not book:
             raise HTTPException(status_code=404, detail="Libro no encontrado")
         
@@ -3224,7 +3317,7 @@ async def bulk_search_covers(
         for book_id in book_ids:
             try:
                 # Obtener el libro
-                book = crud.get_book(db, book_id=book_id)
+                book = crud.get_book(db, book_id)
                 if not book:
                     results.append({
                         "book_id": book_id,
@@ -3672,6 +3765,139 @@ async def upload_drive_folder_books(
         raise HTTPException(status_code=500, detail=f"Error durante la carga de carpeta de Drive: {str(e)}")
     finally:
         # Limpiar directorio temporal
+        if temp_dir and os.path.exists(temp_dir):
+            try:
+                shutil.rmtree(temp_dir)
+            except OSError:
+                pass  # Ignorar errores de limpieza
+
+@app.post("/api/upload-folder-cloud/", response_model=schemas.BulkUploadResponse)
+async def upload_folder_books_cloud(
+    files: List[UploadFile] = File(description="Archivos de la carpeta"),
+    folder_name: str = Form(description="Nombre de la carpeta"),
+    total_files: int = Form(description="Total de archivos"),
+    db: Session = Depends(get_db)
+):
+    """
+    Carga masiva de libros desde una carpeta local en modo nube (seleccionada por el usuario)
+    """
+    # Verificar que Google Drive esté configurado
+    try:
+        from google_drive_manager import get_drive_manager
+        drive_manager = get_drive_manager()
+        if not drive_manager.service:
+            raise HTTPException(
+                status_code=503, 
+                detail="Google Drive no está configurado. Configure Google Drive antes de subir libros."
+            )
+    except ImportError:
+        raise HTTPException(
+            status_code=503, 
+            detail="Google Drive no está disponible. Instale las dependencias necesarias."
+        )
+    
+    temp_dir = None
+    try:
+        # Crear directorio temporal para los archivos
+        temp_dir = "temp_folder_upload"
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        # Guardar archivos temporalmente
+        saved_files = []
+        for file in files:
+            if file.filename.lower().endswith(('.pdf', '.epub')):
+                file_path = os.path.join(temp_dir, file.filename)
+                with open(file_path, 'wb') as f:
+                    content = await file.read()
+                    f.write(content)
+                saved_files.append(file_path)
+        
+        if not saved_files:
+            raise HTTPException(
+                status_code=400, 
+                detail="No se encontraron archivos PDF o EPUB válidos en la carpeta."
+            )
+        
+        # VERIFICACIÓN PREVIA MASIVA DE DUPLICADOS
+        bulk_check_result = bulk_quick_check(saved_files, db)
+        unique_files = bulk_check_result["unique_files"]
+        duplicate_files = bulk_check_result["duplicate_files"]
+        stats = bulk_check_result["stats"]
+        
+        # Procesar solo archivos únicos concurrentemente
+        results = []
+        if unique_files:
+            # Reducir workers para evitar rate limiting de la API de IA
+            max_workers = min(2, len(unique_files))  # Máximo 2 workers concurrentes
+            
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Crear tareas para cada libro único usando la función específica para carga masiva en modo nube
+                future_to_file = {
+                    executor.submit(process_single_book_bulk_cloud_async, file_path, STATIC_COVERS_DIR, db): file_path
+                    for file_path in unique_files
+                }
+                
+                # Recolectar resultados con delay entre procesamientos
+                for future in as_completed(future_to_file):
+                    result = future.result()
+                    results.append(result)
+                    
+                    # Pequeño delay entre procesamientos para evitar rate limiting
+                    time.sleep(0.5)
+        
+        # Agregar resultados de duplicados detectados en verificación previa
+        for duplicate in duplicate_files:
+            existing_book_dict = None
+            if duplicate.get("existing_book"):
+                existing_book = duplicate["existing_book"]
+                existing_book_dict = {
+                    "id": existing_book.id,
+                    "title": existing_book.title,
+                    "author": existing_book.author,
+                    "category": existing_book.category
+                }
+            
+            results.append({
+                "success": False,
+                "file": duplicate["file"],
+                "error": "Duplicado detectado (verificación previa)",
+                "duplicate_info": {
+                    "is_duplicate": True,
+                    "reason": duplicate.get("reason", "Archivo ya existe en la base de datos"),
+                    "existing_book": existing_book_dict,
+                    "message": duplicate.get("message", "Este archivo ya ha sido procesado anteriormente")
+                }
+            })
+        
+        # Resumen de resultados
+        successful = [r for r in results if r["success"]]
+        failed = [r for r in results if not r["success"] and r.get("error") != "Duplicado detectado (verificación previa)" and r.get("error") != "Duplicado detectado (verificación rápida)" and r.get("error") != "Duplicado detectado (verificación final)"]
+        duplicates = [r for r in results if not r["success"] and (r.get("error") == "Duplicado detectado (verificación previa)" or r.get("error") == "Duplicado detectado (verificación rápida)" or r.get("error") == "Duplicado detectado (verificación final)")]
+        
+        return {
+            "message": f"Procesamiento completado. {len(successful)} libros procesados exitosamente, {len(failed)} fallaron, {len(duplicates)} duplicados detectados.",
+            "total_files": len(saved_files),
+            "successful": len(successful),
+            "failed": len(failed),
+            "duplicates": len(duplicates),
+            "successful_books": successful,
+            "failed_files": failed,
+            "duplicate_files": duplicates,
+            "optimization_stats": {
+                "total_files": len(saved_files),
+                "unique_files": len(successful),
+                "duplicate_files": len(duplicates),
+                "saved_ai_calls": len(duplicates)
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error durante la carga de carpeta en modo nube: {e}")
+        raise HTTPException(status_code=500, detail=f"Error durante la carga de carpeta: {str(e)}")
+    finally:
+        # Limpiar archivos temporales
         if temp_dir and os.path.exists(temp_dir):
             try:
                 shutil.rmtree(temp_dir)

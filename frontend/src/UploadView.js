@@ -288,13 +288,8 @@ function UploadView() {
       return;
     }
 
-    // Verificar que estamos en modo local
-    if (appMode !== 'local') {
-      setMessage('❌ La selección de carpeta solo está disponible en modo local. Cambia a modo local para usar esta función.');
-      return;
-    }
-    
-    console.log('🚀 Iniciando carga de carpeta en modo local...');
+    console.log('🚀 Iniciando carga de carpeta...');
+    console.log('🔍 Modo actual:', appMode);
     setIsLoading(true);
     setProgress({ current: 0, total: 0, message: 'Recopilando archivos de la carpeta...' });
 
@@ -311,54 +306,107 @@ function UploadView() {
       }
 
       console.log(`📚 Archivos encontrados: ${files.length}`);
-      setProgress({ current: 0, total: files.length, message: `Procesando ${files.length} archivos en modo local...` });
+      setProgress({ current: 0, total: files.length, message: `Procesando ${files.length} archivos en modo ${appMode}...` });
 
-      // Procesar archivos uno por uno (para evitar límites de tamaño)
-      let successful = 0;
-      let failed = 0;
-      let duplicates = 0;
+      if (appMode === 'local') {
+        // Modo local: procesar archivos uno por uno
+        let successful = 0;
+        let failed = 0;
+        let duplicates = 0;
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        console.log(`📖 Procesando archivo ${i + 1}/${files.length}: ${file.name}`);
-        
-        setProgress({ 
-          current: i + 1, 
-          total: files.length, 
-          message: `Procesando ${file.name}...` 
-        });
-
-        try {
-          console.log(`🔄 Enviando ${file.name} al backend...`);
-          const response = await uploadBook(file);
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          console.log(`📖 Procesando archivo ${i + 1}/${files.length}: ${file.name}`);
           
-          if (response && response.success === false && response.isDuplicate) {
-            console.log(`⚠️ ${file.name} es un duplicado: ${response.detail}`);
-            duplicates++;
-          } else if (response && response.id) {
-            console.log(`✅ ${file.name} procesado exitosamente`);
-            successful++;
-          } else {
-            console.log(`❌ Error procesando ${file.name}:`, response);
+          setProgress({ 
+            current: i + 1, 
+            total: files.length, 
+            message: `Procesando ${file.name}...` 
+          });
+
+          try {
+            console.log(`🔄 Enviando ${file.name} al backend...`);
+            const response = await uploadBook(file);
+            
+            if (response && response.success === false && response.isDuplicate) {
+              console.log(`⚠️ ${file.name} es un duplicado: ${response.detail}`);
+              duplicates++;
+            } else if (response && response.id) {
+              console.log(`✅ ${file.name} procesado exitosamente`);
+              successful++;
+            } else {
+              console.log(`❌ Error procesando ${file.name}:`, response);
+              failed++;
+            }
+          } catch (error) {
+            console.error(`❌ Error procesando ${file.name}:`, error);
             failed++;
           }
+        }
+
+        const detailedMessage = `✅ Procesamiento completado.\n\n📋 Resumen:\n• Libros procesados: ${successful}\n• Errores: ${failed}\n• Duplicados detectados: ${duplicates}`;
+        
+        console.log('🎉 Procesamiento de carpeta completado:', { successful, failed, duplicates });
+        setMessage(detailedMessage);
+        setSelectedFolder(null);
+        setIsLoading(false);
+        setProgress(null);
+        
+        setTimeout(() => {
+          navigate('/', { replace: true });
+        }, 5000);
+      } else if (appMode === 'drive') {
+        // Modo nube: enviar carpeta completa al backend
+        console.log('☁️ Procesando carpeta en modo nube...');
+        
+        // Crear un FormData con los archivos
+        const formData = new FormData();
+        
+        // Agregar cada archivo al FormData
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          formData.append('files', file);
+        }
+        
+        // Agregar información de la carpeta
+        formData.append('folder_name', selectedFolder.name);
+        formData.append('total_files', files.length.toString());
+        
+        setProgress({ current: 0, total: files.length, message: 'Enviando archivos al servidor...' });
+        
+        try {
+          const response = await fetch('http://localhost:8001/api/upload-folder-cloud/', {
+            method: 'POST',
+            body: formData
+          });
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Error del servidor: ${response.status} - ${errorText}`);
+          }
+          
+          const result = await response.json();
+          
+          console.log('✅ Resultado del procesamiento:', result);
+          
+          const detailedMessage = `✅ Procesamiento completado.\n\n📋 Resumen:\n• Total de archivos: ${result.total_files}\n• Libros procesados: ${result.successful}\n• Errores: ${result.failed}\n• Duplicados detectados: ${result.duplicates}`;
+          
+          setMessage(detailedMessage);
+          setSelectedFolder(null);
+          setIsLoading(false);
+          setProgress(null);
+          
+          setTimeout(() => {
+            navigate('/', { replace: true });
+          }, 5000);
+          
         } catch (error) {
-          console.error(`❌ Error procesando ${file.name}:`, error);
-          failed++;
+          console.error('❌ Error durante el procesamiento en modo nube:', error);
+          setMessage(`❌ Error durante el procesamiento: ${error.message}`);
+          setIsLoading(false);
+          setProgress(null);
         }
       }
-
-      const detailedMessage = `✅ Procesamiento completado.\n\n📋 Resumen:\n• Libros procesados: ${successful}\n• Errores: ${failed}\n• Duplicados detectados: ${duplicates}`;
-      
-      console.log('🎉 Procesamiento de carpeta completado:', { successful, failed, duplicates });
-      setMessage(detailedMessage);
-      setSelectedFolder(null);
-      setIsLoading(false);
-      setProgress(null);
-      
-      setTimeout(() => {
-        navigate('/', { replace: true });
-      }, 5000);
     } catch (error) {
       console.error('❌ Error durante el procesamiento de carpeta:', error);
       setMessage('❌ Error de conexión: No se pudo conectar con el backend.');
@@ -602,7 +650,7 @@ function UploadView() {
           <div className="bulk-info">
           <small>
             Selecciona una carpeta de tu computadora que contenga libros (PDF y EPUB). <br/>
-            La aplicación procesará todos los archivos de forma secuencial en modo local.
+            La aplicación procesará todos los archivos de forma secuencial en modo {appMode === 'local' ? 'local' : 'nube'}.
           </small>
               <button 
                 onClick={openHelpModal}
@@ -695,7 +743,6 @@ function UploadView() {
         className="upload-button" 
         disabled={isLoading || 
                  (!selectedFile && !selectedZip && !selectedFolder && !driveFolderUrl.trim()) ||
-                 (uploadMode === 'folder' && appMode !== 'local') ||
                  (uploadMode === 'drive-folder' && appMode !== 'drive')}
       >
         {isLoading ? 'Procesando...' : `Analizar y Guardar ${uploadMode === 'single' ? 'Libro' : 'Libros'}`}
@@ -748,16 +795,23 @@ function UploadView() {
                 </div>
               ) : uploadMode === 'folder' ? (
                 <div>
-                  <h4>📁 Selección de Carpeta (Modo Local)</h4>
+                  <h4>📁 Selección de Carpeta ({appMode === 'local' ? 'Modo Local' : 'Modo Nube'})</h4>
                   <ul>
                     <li>Selecciona una carpeta que contenga libros PDF y EPUB</li>
                     <li>La aplicación buscará recursivamente en todos los subdirectorios</li>
-                    <li>Se procesarán los archivos uno por uno para evitar límites de tamaño</li>
+                    <li>Se procesarán los archivos de forma optimizada</li>
                     <li>Cada libro será analizado con IA para extraer metadatos</li>
                     <li>Se detectarán automáticamente duplicados por nombre de archivo, título y autor</li>
                     <li>Los duplicados no se agregarán a la biblioteca</li>
-                    <li>Los libros se almacenarán localmente en el servidor</li>
+                    {appMode === 'local' ? (
+                      <li>Los libros se almacenarán localmente en el servidor</li>
+                    ) : (
+                      <li>Los libros se subirán a Google Drive organizados por categorías y letras</li>
+                    )}
                     <li>Esta opción requiere un navegador moderno que soporte la API de directorios</li>
+                    {appMode === 'drive' && (
+                      <li>Requiere que Google Drive esté configurado correctamente</li>
+                    )}
                   </ul>
                 </div>
               ) : uploadMode === 'drive-folder' ? (

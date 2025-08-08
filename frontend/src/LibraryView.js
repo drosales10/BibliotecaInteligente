@@ -111,6 +111,7 @@ const LocationIndicator = ({ book }) => {
 
 // Modal de confirmación
 const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, bookTitle, isDeleting, isMultiple = false, selectedCount = 0 }) => {
+  console.log('🔍 DeleteConfirmationModal renderizado con props:', { isOpen, bookTitle, isMultiple, selectedCount });
   if (!isOpen) return null;
 
   // Validar que selectedCount sea un número válido
@@ -157,6 +158,9 @@ function LibraryView() {
     isMultiple: false, 
     selectedIds: [] 
   });
+  
+  // Log del estado del modal para depuración
+  console.log('🔍 Estado actual del deleteModal:', deleteModal);
   const [deletingBookId, setDeletingBookId] = useState(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedBooks, setSelectedBooks] = useState(new Set());
@@ -340,6 +344,7 @@ function LibraryView() {
   }, [searchTerm, filters, isAdvancedMode, withLoading, fetchBooks]);
 
   const handleDeleteClick = (bookId, bookTitle) => {
+    console.log('🔍 handleDeleteClick llamado con:', { bookId, bookTitle });
     setDeleteModal({ 
       isOpen: true, 
       bookId, 
@@ -347,33 +352,43 @@ function LibraryView() {
       isMultiple: false, 
       selectedIds: [] 
     });
+    console.log('🔍 Modal configurado para abrirse');
   };
 
   const handleDeleteConfirm = async () => {
+    console.log('🔍 handleDeleteConfirm llamado con deleteModal:', deleteModal);
     const { bookId, isMultiple, selectedIds } = deleteModal;
     
     if (isMultiple) {
+      console.log('🔍 Ejecutando eliminación masiva');
       await handleBulkDelete(selectedIds);
     } else {
+      console.log('🔍 Ejecutando eliminación individual para bookId:', bookId);
       await handleSingleDelete(bookId);
     }
   };
 
   const handleSingleDelete = async (bookId) => {
+    console.log('🔍 handleSingleDelete iniciado para bookId:', bookId);
     setDeletingBookId(bookId);
     
     try {
+      console.log('🔍 Llamando a deleteBook...');
       const response = await deleteBook(bookId);
+      console.log('🔍 Respuesta de deleteBook:', response);
       
       if (response.ok) {
+        console.log('🔍 Eliminación exitosa, recargando libros...');
         // Recargar la lista de libros para actualizar la UI
         await withLoading('initial', fetchBooks);
         resetModal();
       } else {
+        console.log('🔍 Error en respuesta:', response.status, response.statusText);
         const errorData = await response.json();
         alert(`Error al eliminar el libro: ${errorData.detail || 'Error desconocido'}`);
       }
     } catch (err) {
+      console.error('🔍 Error en handleSingleDelete:', err);
       alert('Error de conexión al intentar eliminar el libro.');
     } finally {
       setDeletingBookId(null);
@@ -382,28 +397,60 @@ function LibraryView() {
 
   const handleBulkDelete = async (bookIds) => {
     try {
-      const deletePromises = bookIds.map(async (bookId) => {
-        try {
-          const response = await deleteBook(bookId);
-          return { bookId, response, success: true };
-        } catch (error) {
-          return { bookId, error: error.message, success: false };
+      console.log('🔍 handleBulkDelete iniciado para IDs:', bookIds);
+      
+      if (isDriveMode) {
+        // En modo nube, usar el endpoint de eliminación masiva de Drive
+        console.log('🔍 Usando eliminación masiva de Drive');
+        const response = await fetch('http://localhost:8001/api/drive/books/bulk', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ book_ids: bookIds }),
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log('🔍 Resultado de eliminación masiva:', result);
+          
+          if (result.deleted_count > 0) {
+            alert(`Se eliminaron ${result.deleted_count} libro${result.deleted_count > 1 ? 's' : ''} exitosamente.`);
+          }
+          if (result.failed_count > 0) {
+            const errorMessages = result.failed_deletions.join('\n');
+            alert(`Error al eliminar algunos libros:\n${errorMessages}`);
+          }
+        } else {
+          const errorData = await response.json();
+          alert(`Error al eliminar libros: ${errorData.detail || 'Error desconocido'}`);
         }
-      });
-      
-      const results = await Promise.all(deletePromises);
-      
-      const successfulDeletes = results.filter(result => result.success);
-      const failedDeletes = results.filter(result => !result.success);
+      } else {
+        // En modo local, usar eliminación individual
+        console.log('🔍 Usando eliminación individual para modo local');
+        const deletePromises = bookIds.map(async (bookId) => {
+          try {
+            const response = await deleteBook(bookId);
+            return { bookId, response, success: true };
+          } catch (error) {
+            return { bookId, error: error.message, success: false };
+          }
+        });
+        
+        const results = await Promise.all(deletePromises);
+        
+        const successfulDeletes = results.filter(result => result.success);
+        const failedDeletes = results.filter(result => !result.success);
 
-      if (successfulDeletes.length > 0) {
-        alert(`Se eliminaron ${successfulDeletes.length} libro${successfulDeletes.length > 1 ? 's' : ''} exitosamente.`);
-      }
-      if (failedDeletes.length > 0) {
-        const errorMessages = failedDeletes.map(result => 
-          `Error al eliminar el libro ${result.bookId}: ${result.error}`
-        );
-        alert(`Error al eliminar algunos libros:\n${errorMessages.join('\n')}`);
+        if (successfulDeletes.length > 0) {
+          alert(`Se eliminaron ${successfulDeletes.length} libro${successfulDeletes.length > 1 ? 's' : ''} exitosamente.`);
+        }
+        if (failedDeletes.length > 0) {
+          const errorMessages = failedDeletes.map(result => 
+            `Error al eliminar el libro ${result.bookId}: ${result.error}`
+          );
+          alert(`Error al eliminar algunos libros:\n${errorMessages.join('\n')}`);
+        }
       }
 
       // Re-fetch books to update the UI
@@ -413,7 +460,7 @@ function LibraryView() {
       setSelectedBooks(new Set());
       
     } catch (err) {
-      console.error('Error en handleBulkDelete:', err);
+      console.error('🔍 Error en handleBulkDelete:', err);
       alert('Error de conexión al intentar eliminar los libros.');
     }
   };
@@ -755,7 +802,11 @@ function LibraryView() {
                 />
               )}
               <button 
-                onClick={() => handleDeleteClick(book.id, book.title)} 
+                onClick={() => {
+                  console.log('🔍 Botón eliminar clickeado para libro:', { id: book.id, title: book.title });
+                  console.log('🔍 Estados del botón:', { deletingBookId: deletingBookId, selectionMode: selectionMode });
+                  handleDeleteClick(book.id, book.title);
+                }} 
                 className="delete-book-btn" 
                 title="Eliminar libro"
                 disabled={deletingBookId === book.id || selectionMode}
