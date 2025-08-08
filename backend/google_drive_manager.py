@@ -1374,6 +1374,180 @@ class GoogleDriveManager:
         except Exception as e:
             return {"success": False, "error": f"Error al verificar accesibilidad: {str(e)}"}
 
+    @retry_on_error()
+    def move_book_to_new_category(self, file_id, new_category, title, author):
+        """
+        Mueve un libro a una nueva categoría en Google Drive
+        
+        Args:
+            file_id (str): ID del archivo en Google Drive
+            new_category (str): Nueva categoría del libro
+            title (str): Título del libro
+            author (str): Autor del libro
+            
+        Returns:
+            dict: Resultado de la operación con información actualizada
+        """
+        try:
+            self._ensure_service_connection()
+            
+            # Obtener información actual del archivo
+            file_info = self.service.files().get(fileId=file_id, fields='id,name,parents,description').execute()
+            if not file_info:
+                return {'success': False, 'error': 'Archivo no encontrado en Google Drive'}
+            
+            # Obtener carpeta de categoría destino
+            new_category_folder_id = self.get_or_create_category_folder(new_category)
+            if not new_category_folder_id:
+                return {'success': False, 'error': 'No se pudo crear la carpeta de categoría destino'}
+            
+            # Obtener carpeta de letra destino
+            new_letter_folder_id = self.get_letter_folder(new_category_folder_id, title)
+            if not new_letter_folder_id:
+                return {'success': False, 'error': 'No se pudo crear la carpeta de letra destino'}
+            
+            # Verificar si el archivo ya está en la carpeta correcta
+            current_parents = file_info.get('parents', [])
+            if new_letter_folder_id in current_parents:
+                logger.info(f"El archivo ya está en la carpeta correcta: {title}")
+                return {
+                    'success': True,
+                    'file_id': file_id,
+                    'category': new_category,
+                    'letter_folder': self.get_first_letter(title),
+                    'message': 'El archivo ya estaba en la ubicación correcta'
+                }
+            
+            # Preparar la actualización del archivo
+            # Primero, remover de la carpeta actual
+            if current_parents:
+                self.service.files().update(
+                    fileId=file_id,
+                    removeParents=','.join(current_parents),
+                    fields='id,parents'
+                ).execute()
+            
+            # Luego, agregar a la nueva carpeta
+            updated_file = self.service.files().update(
+                fileId=file_id,
+                addParents=new_letter_folder_id,
+                body={
+                    'description': f'Título: {title}\nAutor: {author}\nCategoría: {new_category}'
+                },
+                fields='id,name,parents,webViewLink'
+            ).execute()
+            
+            # Limpiar caché después de mover
+            self._clear_cache()
+            
+            logger.info(f"Libro movido exitosamente: {title} -> {new_category}")
+            return {
+                'success': True,
+                'file_id': file_id,
+                'category': new_category,
+                'letter_folder': self.get_first_letter(title),
+                'web_view_link': updated_file.get('webViewLink'),
+                'message': f'Libro movido exitosamente a la categoría {new_category}'
+            }
+            
+        except Exception as e:
+            error_msg = str(e)
+            if "WRONG_VERSION_NUMBER" in error_msg or "SSL" in error_msg.upper() or "DECRYPTION_FAILED" in error_msg:
+                logger.warning("Error SSL detectado en move_book_to_new_category, intentando con configuración alternativa...")
+                try:
+                    # Recrear servicio con configuración SSL alternativa
+                    from google.oauth2.credentials import Credentials
+                    from google_auth_oauthlib.flow import InstalledAppFlow
+                    import urllib3
+                    import ssl
+                    import httplib2
+                    
+                    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                    ssl_context = ssl.create_default_context()
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl.CERT_NONE
+                    http = httplib2.Http(timeout=30, disable_ssl_certificate_validation=True)
+                    
+                    if os.path.exists(TOKEN_FILE):
+                        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+                    else:
+                        flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
+                        creds = flow.run_local_server(port=0)
+                        with open(TOKEN_FILE, 'w') as token:
+                            token.write(creds.to_json())
+                    
+                    # Usar la configuración SSL alternativa con el objeto http
+                    self.service = build('drive', 'v3', credentials=creds, http=http)
+                    
+                    # Reintentar la operación sin recursión
+                    self._ensure_service_connection()
+                    
+                    # Obtener información actual del archivo
+                    file_info = self.service.files().get(fileId=file_id, fields='id,name,parents,description').execute()
+                    if not file_info:
+                        return {'success': False, 'error': 'Archivo no encontrado en Google Drive'}
+                    
+                    # Obtener carpeta de categoría destino
+                    new_category_folder_id = self.get_or_create_category_folder(new_category)
+                    if not new_category_folder_id:
+                        return {'success': False, 'error': 'No se pudo crear la carpeta de categoría destino'}
+                    
+                    # Obtener carpeta de letra destino
+                    new_letter_folder_id = self.get_letter_folder(new_category_folder_id, title)
+                    if not new_letter_folder_id:
+                        return {'success': False, 'error': 'No se pudo crear la carpeta de letra destino'}
+                    
+                    # Verificar si el archivo ya está en la carpeta correcta
+                    current_parents = file_info.get('parents', [])
+                    if new_letter_folder_id in current_parents:
+                        logger.info(f"El archivo ya está en la carpeta correcta: {title}")
+                        return {
+                            'success': True,
+                            'file_id': file_id,
+                            'category': new_category,
+                            'letter_folder': self.get_first_letter(title),
+                            'message': 'El archivo ya estaba en la ubicación correcta'
+                        }
+                    
+                    # Preparar la actualización del archivo
+                    # Primero, remover de la carpeta actual
+                    if current_parents:
+                        self.service.files().update(
+                            fileId=file_id,
+                            removeParents=','.join(current_parents),
+                            fields='id,parents'
+                        ).execute()
+                    
+                    # Luego, agregar a la nueva carpeta
+                    updated_file = self.service.files().update(
+                        fileId=file_id,
+                        addParents=new_letter_folder_id,
+                        body={
+                            'description': f'Título: {title}\nAutor: {author}\nCategoría: {new_category}'
+                        },
+                        fields='id,name,parents,webViewLink'
+                    ).execute()
+                    
+                    # Limpiar caché después de mover
+                    self._clear_cache()
+                    
+                    logger.info(f"Libro movido exitosamente con configuración SSL alternativa: {title} -> {new_category}")
+                    return {
+                        'success': True,
+                        'file_id': file_id,
+                        'category': new_category,
+                        'letter_folder': self.get_first_letter(title),
+                        'web_view_link': updated_file.get('webViewLink'),
+                        'message': f'Libro movido exitosamente a la categoría {new_category}'
+                    }
+                    
+                except Exception as ssl_retry_error:
+                    logger.error(f"❌ Error persistente SSL en move_book_to_new_category: {ssl_retry_error}")
+                    return {'success': False, 'error': f'Error SSL persistente: {str(ssl_retry_error)}'}
+            else:
+                logger.error(f"Error al mover libro a nueva categoría: {e}")
+                return {'success': False, 'error': str(e)}
+
 # Instancia global del gestor
 drive_manager = None
 

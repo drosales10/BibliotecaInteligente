@@ -3204,11 +3204,15 @@ async def update_book(
 ):
     """
     Actualiza los datos de un libro (título, autor, categoría)
+    Si el libro está en Google Drive y se cambia la categoría, mueve el archivo a la nueva carpeta
     """
     try:
         book = crud.get_book(db, book_id)
         if not book:
             raise HTTPException(status_code=404, detail="Libro no encontrado")
+        
+        # Guardar la categoría anterior para comparar
+        old_category = book.category if hasattr(book, 'category') else None
         
         # Actualizar campos permitidos
         if 'title' in book_update:
@@ -3217,6 +3221,43 @@ async def update_book(
             book.author = book_update['author']
         if 'category' in book_update:
             book.category = book_update['category']
+        
+        # Si el libro está en Google Drive y se cambió la categoría, mover el archivo
+        if (book.drive_file_id and 
+            'category' in book_update and 
+            old_category and 
+            book_update['category'] != old_category):
+            
+            try:
+                # Importar el gestor de Google Drive
+                from google_drive_manager import get_drive_manager
+                drive_manager = get_drive_manager()
+                
+                if not drive_manager.service:
+                    logger.warning("Google Drive no está configurado, actualizando solo la base de datos")
+                else:
+                    # Mover el archivo a la nueva categoría en Google Drive
+                    move_result = drive_manager.move_book_to_new_category(
+                        file_id=book.drive_file_id,
+                        new_category=book_update['category'],
+                        title=book.title,
+                        author=book.author
+                    )
+                    
+                    if move_result['success']:
+                        logger.info(f"Libro movido exitosamente en Google Drive: {book.title} -> {book_update['category']}")
+                        # Actualizar información adicional si es necesario
+                        if 'web_view_link' in move_result:
+                            book.drive_web_link = move_result['web_view_link']
+                        if 'letter_folder' in move_result:
+                            book.drive_letter_folder = move_result['letter_folder']
+                    else:
+                        logger.error(f"Error al mover libro en Google Drive: {move_result['error']}")
+                        # Continuar con la actualización de la base de datos aunque falle el movimiento
+                        
+            except Exception as drive_error:
+                logger.error(f"Error al procesar movimiento en Google Drive: {drive_error}")
+                # Continuar con la actualización de la base de datos aunque falle el movimiento
         
         db.commit()
         db.refresh(book)
