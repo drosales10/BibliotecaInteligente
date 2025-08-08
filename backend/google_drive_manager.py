@@ -154,9 +154,10 @@ class GoogleDriveManager:
                     ssl_context.check_hostname = False
                     ssl_context.verify_mode = ssl.CERT_NONE
                     
-                    # Configurar HTTP con contexto SSL personalizado
+                    # Configurar HTTP con contexto SSL personalizado y credenciales
                     import httplib2
                     http = httplib2.Http(timeout=30, disable_ssl_certificate_validation=True)
+                    # Usar la misma lógica que funciona para la carga individual
                     self.service = build('drive', 'v3', credentials=creds, http=http)
                     
                     logger.info("Servicio de Google Drive inicializado con configuración SSL alternativa")
@@ -253,6 +254,7 @@ class GoogleDriveManager:
                         with open(TOKEN_FILE, 'w') as token:
                             token.write(creds.to_json())
                     
+                    # Usar la configuración SSL alternativa con el objeto http
                     self.service = build('drive', 'v3', credentials=creds, http=http)
                     
                     # Reintentar la operación
@@ -341,6 +343,7 @@ class GoogleDriveManager:
                         with open(TOKEN_FILE, 'w') as token:
                             token.write(creds.to_json())
                     
+                    # Usar la configuración SSL alternativa con el objeto http
                     self.service = build('drive', 'v3', credentials=creds, http=http)
                     
                     # Reintentar la operación
@@ -469,6 +472,10 @@ class GoogleDriveManager:
                         with open(TOKEN_FILE, 'w') as token:
                             token.write(creds.to_json())
                     
+                    # Configurar HTTP con contexto SSL personalizado y credenciales
+                    import httplib2
+                    http = httplib2.Http(timeout=30, disable_ssl_certificate_validation=True)
+                    # Usar la configuración SSL alternativa con el objeto http
                     self.service = build('drive', 'v3', credentials=creds, http=http)
                     
                     # Reintentar toda la operación
@@ -596,8 +603,52 @@ class GoogleDriveManager:
             return {'success': True, 'error': None}
             
         except Exception as e:
-            logger.error(f"Error al eliminar libro de Google Drive: {e}")
-            return {'success': False, 'error': str(e)}
+            error_msg = str(e)
+            if "WRONG_VERSION_NUMBER" in error_msg or "SSL" in error_msg.upper() or "DECRYPTION_FAILED" in error_msg:
+                logger.warning("Error SSL detectado en delete_book_from_drive, intentando con configuración alternativa...")
+                try:
+                    # Recrear servicio con configuración SSL alternativa
+                    from google.oauth2.credentials import Credentials
+                    from google_auth_oauthlib.flow import InstalledAppFlow
+                    import urllib3
+                    import ssl
+                    import httplib2
+                    
+                    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                    ssl_context = ssl.create_default_context()
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl.CERT_NONE
+                    http = httplib2.Http(timeout=30, disable_ssl_certificate_validation=True)
+                    
+                    if os.path.exists(TOKEN_FILE):
+                        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+                    else:
+                        flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
+                        creds = flow.run_local_server(port=0)
+                        with open(TOKEN_FILE, 'w') as token:
+                            token.write(creds.to_json())
+                    
+                    # Configurar HTTP con contexto SSL personalizado y credenciales
+                    import httplib2
+                    http = httplib2.Http(timeout=30, disable_ssl_certificate_validation=True)
+                    # Usar la configuración SSL alternativa con el objeto http
+                    self.service = build('drive', 'v3', credentials=creds, http=http)
+                    
+                    # Reintentar la operación de eliminación
+                    self.service.files().delete(fileId=file_id).execute()
+                    
+                    # Limpiar caché después de eliminar
+                    self._clear_cache()
+                    
+                    logger.info(f"Libro eliminado de Google Drive (con configuración SSL alternativa): {file_id}")
+                    return {'success': True, 'error': None}
+                    
+                except Exception as ssl_retry_error:
+                    logger.error(f"Error persistente SSL en delete_book_from_drive: {ssl_retry_error}")
+                    return {'success': False, 'error': str(ssl_retry_error)}
+            else:
+                logger.error(f"Error al eliminar libro de Google Drive: {e}")
+                return {'success': False, 'error': str(e)}
 
     def delete_cover_from_drive(self, cover_url):
         """
@@ -621,8 +672,49 @@ class GoogleDriveManager:
                 return {'success': False, 'error': 'URL de portada no válida'}
                 
         except Exception as e:
-            logger.error(f"Error al eliminar portada de Google Drive: {e}")
-            return {'success': False, 'error': str(e)}
+            error_msg = str(e)
+            if "WRONG_VERSION_NUMBER" in error_msg or "SSL" in error_msg.upper() or "DECRYPTION_FAILED" in error_msg:
+                logger.warning("Error SSL detectado en delete_cover_from_drive, intentando con configuración alternativa...")
+                try:
+                    # Recrear servicio con configuración SSL alternativa
+                    from google.oauth2.credentials import Credentials
+                    from google_auth_oauthlib.flow import InstalledAppFlow
+                    import urllib3
+                    import ssl
+                    import httplib2
+                    
+                    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                    ssl_context = ssl.create_default_context()
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl.CERT_NONE
+                    http = httplib2.Http(timeout=30, disable_ssl_certificate_validation=True)
+                    
+                    if os.path.exists(TOKEN_FILE):
+                        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+                    else:
+                        flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
+                        creds = flow.run_local_server(port=0)
+                        with open(TOKEN_FILE, 'w') as token:
+                            token.write(creds.to_json())
+                    
+                    # Configurar HTTP con contexto SSL personalizado y credenciales
+                    import httplib2
+                    http = httplib2.Http(timeout=30, disable_ssl_certificate_validation=True)
+                    # Usar la configuración SSL alternativa con el objeto http
+                    self.service = build('drive', 'v3', credentials=creds, http=http)
+                    
+                    # Reintentar la operación de eliminación
+                    self.service.files().delete(fileId=file_id).execute()
+                    
+                    logger.info(f"Portada eliminada de Google Drive (con configuración SSL alternativa): {file_id}")
+                    return {'success': True, 'error': None}
+                    
+                except Exception as ssl_retry_error:
+                    logger.error(f"Error persistente SSL en delete_cover_from_drive: {ssl_retry_error}")
+                    return {'success': False, 'error': str(ssl_retry_error)}
+            else:
+                logger.error(f"Error al eliminar portada de Google Drive: {e}")
+                return {'success': False, 'error': str(e)}
     
     @retry_on_error()
     def list_books_by_category(self, category):
@@ -900,7 +992,10 @@ class GoogleDriveManager:
                         with open(TOKEN_FILE, 'w') as token:
                             token.write(creds.to_json())
                     
-                    # Recrear servicio con configuración SSL alternativa
+                    # Configurar HTTP con contexto SSL personalizado y credenciales
+                    import httplib2
+                    http = httplib2.Http(timeout=30, disable_ssl_certificate_validation=True)
+                    # Usar la configuración SSL alternativa con el objeto http
                     self.service = build('drive', 'v3', credentials=creds, http=http)
                     
                     # Reintentar la operación completa

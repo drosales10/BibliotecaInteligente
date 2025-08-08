@@ -563,3 +563,13 @@ def get_books_by_category(db: Session, category: str):
     Obtiene todos los libros de una categoría específica
     """
     return db.query(models.Book).filter(models.Book.category == category).all()
+
+def get_drive_categories(db: Session) -> list[str]:
+    """
+    Obtiene las categorías de libros que están en Google Drive
+    """
+    return [c[0] for c in db.query(models.Book.category)
+            .filter(models.Book.drive_file_id.isnot(None))
+            .distinct()
+            .order_by(models.Book.category)
+            .all()]
