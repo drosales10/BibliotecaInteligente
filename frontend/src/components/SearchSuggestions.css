@@ -1,0 +1,358 @@
+/* SearchSuggestions.css */
+.search-suggestions {
+  background: var(--background-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  max-width: 400px;
+  width: 100%;
+}
+
+.suggestions-header {
+  padding: 12px 16px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.suggestions-header span {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.suggestions-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-left: 3px solid transparent;
+  gap: 12px;
+}
+
+.suggestion-item:hover,
+.suggestion-item:focus {
+  background: var(--background-hover);
+  border-left-color: var(--primary-color);
+  outline: none;
+}
+
+.suggestion-item:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: -2px;
+}
+
+.suggestion-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.suggestion-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.suggestion-text {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.suggestion-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.suggestion-item:hover .suggestion-actions,
+.suggestion-item:focus .suggestion-actions {
+  opacity: 1;
+}
+
+.suggestion-action-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.suggestion-action-button:hover {
+  background: var(--primary-color);
+  color: white;
+  transform: scale(1.1);
+}
+
+.suggestion-action-button:active {
+  transform: scale(0.95);
+}
+
+.suggestion-action-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.suggestions-footer {
+  padding: 8px 16px;
+  background: var(--background-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+.footer-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Scrollbar personalizado */
+.suggestions-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.suggestions-list::-webkit-scrollbar-track {
+  background: var(--background-secondary);
+  border-radius: 3px;
+}
+
+.suggestions-list::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.suggestions-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* Estados especiales */
+.suggestion-item.selected {
+  background: var(--primary-color);
+  color: white;
+  border-left-color: var(--primary-dark);
+}
+
+.suggestion-item.selected .suggestion-icon,
+.suggestion-item.selected .suggestion-text {
+  color: white;
+}
+
+.suggestion-item.selected .suggestion-action-button {
+  color: white;
+}
+
+.suggestion-item.selected .suggestion-action-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Animaciones */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.search-suggestions {
+  animation: slideIn 0.2s ease-out;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .search-suggestions {
+    max-width: 100%;
+    border-radius: 8px;
+  }
+  
+  .suggestions-header,
+  .suggestions-footer {
+    padding: 10px 12px;
+  }
+  
+  .suggestion-item {
+    padding: 10px 12px;
+  }
+  
+  .suggestions-list {
+    max-height: 250px;
+  }
+}
+
+@media (max-width: 480px) {
+  .suggestions-header,
+  .suggestions-footer {
+    padding: 8px 10px;
+  }
+  
+  .suggestion-item {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  
+  .suggestion-icon {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .suggestion-icon svg {
+    width: 14px;
+    height: 14px;
+  }
+  
+  .suggestion-text {
+    font-size: 13px;
+  }
+  
+  .suggestion-action-button {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .suggestion-action-button svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+/* Modo oscuro específico */
+@media (prefers-color-scheme: dark) {
+  .search-suggestions {
+    background: var(--background-primary);
+    border-color: var(--border-color);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+  
+  .suggestions-header,
+  .suggestions-footer {
+    background: var(--background-secondary);
+    border-color: var(--border-color);
+  }
+  
+  .suggestion-item:hover,
+  .suggestion-item:focus {
+    background: var(--background-hover);
+  }
+}
+
+/* Estados de foco mejorados */
+.suggestion-item:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: -2px;
+}
+
+.suggestion-action-button:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Estados de carga */
+.search-suggestions.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.search-suggestions.loading .suggestion-item {
+  animation: none;
+}
+
+/* Estados vacíos */
+.search-suggestions:empty {
+  display: none;
+}
+
+.suggestions-list:empty {
+  display: none;
+}
+
+/* Accesibilidad */
+.suggestion-item[role="button"] {
+  cursor: pointer;
+}
+
+.suggestion-item[role="button"]:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: -2px;
+}
+
+/* Transiciones suaves */
+.suggestion-item,
+.suggestion-icon,
+.suggestion-action-button,
+.suggestion-actions {
+  transition: all 0.2s ease;
+}
+
+/* Estados de interacción */
+.suggestion-item:active {
+  transform: translateY(1px);
+}
+
+.suggestion-action-button:active {
+  transform: scale(0.9);
+}
+
+/* Estados de error */
+.search-suggestions.error {
+  border-color: var(--danger-color);
+}
+
+.search-suggestions.error .suggestions-header {
+  background: var(--danger-light);
+  color: var(--danger-color);
+}
+
+/* Estados de éxito */
+.search-suggestions.success {
+  border-color: var(--success-color);
+}
+
+.search-suggestions.success .suggestions-header {
+  background: var(--success-light);
+  color: var(--success-color);
+}
+
+/* Estados de advertencia */
+.search-suggestions.warning {
+  border-color: var(--warning-color);
+}
+
+.search-suggestions.warning .suggestions-header {
+  background: var(--warning-light);
+  color: var(--warning-color);
+}
+
+/* Estados de información */
+.search-suggestions.info {
+  border-color: var(--info-color);
+}
+
+.search-suggestions.info .suggestions-header {
+  background: var(--info-light);
+  color: var(--info-color);
+} 

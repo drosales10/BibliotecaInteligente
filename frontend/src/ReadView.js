@@ -34,7 +34,10 @@ const ReadView = () => {
           throw new Error('Error al obtener libros');
         }
 
-        const books = await response.json();
+        const booksData = await response.json();
+        
+        // Manejar nueva estructura con paginación
+        const books = booksData.items || booksData;
         const foundBook = books.find(b => b.id.toString() === id);
 
         if (!foundBook) {
@@ -48,7 +51,10 @@ const ReadView = () => {
             throw new Error('Libro no encontrado');
           }
 
-          const altBooks = await altResponse.json();
+          const altBooksData = await altResponse.json();
+          
+          // Manejar nueva estructura con paginación
+          const altBooks = altBooksData.items || altBooksData;
           const altFoundBook = altBooks.find(b => b.id.toString() === id);
 
           if (!altFoundBook) {

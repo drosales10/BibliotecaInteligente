@@ -38,6 +38,7 @@
   --border-light: #e2e8f0;
   --border-medium: #cbd5e1;
   --border-dark: #94a3b8;
+  --border-color: #e2e8f0;
   
   /* Sombras */
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
@@ -98,6 +99,7 @@
     --border-light: #334155;
     --border-medium: #475569;
     --border-dark: #64748b;
+    --border-color: #334155;
     
     /* Sombras ajustadas para modo oscuro */
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
@@ -173,6 +175,50 @@ html.dark-mode {
 .dark-mode .book-card {
   background-color: #1e293b !important;
   color: #f8fafc !important;
+}
+
+/* Estilos generales para inputs y selects en modo oscuro */
+.dark-mode input,
+.dark-mode select,
+.dark-mode textarea {
+  background-color: #334155 !important;
+  border-color: #475569 !important;
+  color: #f7fafc !important;
+}
+
+.dark-mode input::placeholder,
+.dark-mode select::placeholder,
+.dark-mode textarea::placeholder {
+  color: #a0aec0 !important;
+}
+
+.dark-mode input:focus,
+.dark-mode select:focus,
+.dark-mode textarea:focus {
+  border-color: #3b82f6 !important;
+  color: #f7fafc !important;
+  outline-color: #3b82f6 !important;
+}
+
+.dark-mode select option {
+  background-color: #334155 !important;
+  color: #f7fafc !important;
+}
+
+/* Estilos específicos para inputs de formularios */
+.dark-mode .form-group input,
+.dark-mode .form-group select,
+.dark-mode .form-group textarea {
+  background-color: #334155 !important;
+  border-color: #475569 !important;
+  color: #f7fafc !important;
+}
+
+.dark-mode .form-group input:focus,
+.dark-mode .form-group select:focus,
+.dark-mode .form-group textarea:focus {
+  border-color: #3b82f6 !important;
+  color: #f7fafc !important;
 }
 
 

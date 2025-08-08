@@ -24,8 +24,10 @@ import time
 import threading
 import uuid
 from googleapiclient.http import MediaIoBaseDownload
+import hashlib
 
 import crud, models, database, schemas
+import cover_search
 import logging
 
 # Configurar logging
@@ -58,7 +60,7 @@ def analyze_with_gemini(text: str, max_retries: int = 3) -> dict:
     Tu tarea es identificar el título, el autor y la categoría principal del libro.
     
     INSTRUCCIONES ESPECÍFICAS:
-    1. Para el TÍTULO: Busca el título principal del libro, generalmente en mayúsculas o al inicio del texto
+    1. Para el TÍTULO: Busca el título principal del libro, generalmente en mayúsculas o al inicio del texto. El título debe guardarse en la base de datos en formato capitalizado, nunca todo en mayúsculas.
     2. Para el AUTOR: Busca el nombre del autor, que suele aparecer después de "por", "de", "autor:", o en la portada, también puede estar en el nombre del mismo archivo
     3. Para la CATEGORÍA: Determina el género o categoría principal SIEMPRE EN ESPAÑOL (ej: Psicología, Literatura, Ciencia, Historia, Tecnología, Medicina, etc.)
     4. Para la categoria te puedes guiar por el nombre de la ruta del libro, por ejemplo: "Psicología/Psicología General/Psicología Clínica"
@@ -219,6 +221,14 @@ def process_pdf(file_path: str, static_dir: str) -> dict:
             best_image.save(cover_full_path)
             cover_path = cover_filename  # Solo el nombre del archivo, no la ruta completa
             
+            # Verificar que el archivo se guardó correctamente
+            if os.path.exists(cover_full_path):
+                file_size = os.path.getsize(cover_full_path)
+                print(f"✅ Imagen de portada guardada: {cover_filename} ({file_size} bytes)")
+            else:
+                print(f"❌ Error: El archivo no se guardó correctamente: {cover_full_path}")
+                cover_path = None
+            
             print(f"✅ Imagen de portada guardada: {cover_filename}")
             print(f"✅ Tamaño de imagen: {best_image.width}x{best_image.height}")
             print(f"✅ Ruta completa: {cover_full_path}")
@@ -231,6 +241,24 @@ def process_pdf(file_path: str, static_dir: str) -> dict:
                 best_image = None
     else:
         print("❌ No se encontró ninguna imagen de portada válida")
+        # Intentar búsqueda online como fallback
+        print("🔍 Intentando búsqueda de portada online...")
+        try:
+            # Extraer título del nombre del archivo para la búsqueda
+            base_name = os.path.splitext(os.path.basename(file_path))[0]
+            # Limpiar el nombre para la búsqueda
+            search_title = "".join(c for c in base_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            search_title = search_title.replace('_', ' ').replace('-', ' ')
+            
+            online_cover = cover_search.search_book_cover_online(search_title, static_dir=static_dir)
+            if online_cover:
+                cover_path = online_cover
+                print(f"✅ Portada online encontrada: {online_cover}")
+            else:
+                print("❌ No se pudo encontrar portada online")
+        except Exception as e:
+            print(f"❌ Error en búsqueda de portada online: {e}")
+            cover_path = None
     
     return {"text": text, "cover_image_url": cover_path}
 
@@ -306,10 +334,36 @@ def process_epub(file_path: str, static_dir: str) -> dict:
             
             cover_path = cover_filename  # Solo el nombre del archivo, no la ruta completa
             
-            print(f"✅ Imagen de portada EPUB guardada: {cover_filename}")
+            # Verificar que el archivo se guardó correctamente
+            if os.path.exists(cover_full_path):
+                file_size = os.path.getsize(cover_full_path)
+                print(f"✅ Imagen de portada EPUB guardada: {cover_filename} ({file_size} bytes)")
+            else:
+                print(f"❌ Error: El archivo EPUB no se guardó correctamente: {cover_full_path}")
+                cover_path = None
             
         except Exception as e:
             print(f"❌ Error al guardar imagen de portada EPUB: {e}")
+            cover_path = None
+
+    # Si no se encontró portada, intentar búsqueda online
+    if not cover_path:
+        print("🔍 Intentando búsqueda de portada online para EPUB...")
+        try:
+            # Extraer título del nombre del archivo para la búsqueda
+            base_name = os.path.splitext(os.path.basename(file_path))[0]
+            # Limpiar el nombre para la búsqueda
+            search_title = "".join(c for c in base_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            search_title = search_title.replace('_', ' ').replace('-', ' ')
+            
+            online_cover = cover_search.search_book_cover_online(search_title, static_dir=static_dir)
+            if online_cover:
+                cover_path = online_cover
+                print(f"✅ Portada online encontrada para EPUB: {online_cover}")
+            else:
+                print("❌ No se pudo encontrar portada online para EPUB")
+        except Exception as e:
+            print(f"❌ Error en búsqueda de portada online para EPUB: {e}")
             cover_path = None
 
     return {"text": text, "cover_image_url": cover_path}
@@ -661,8 +715,14 @@ async def upload_book(db: Session = Depends(get_db), book_file: UploadFile = Fil
                 pass  # Ignorar errores de limpieza
 
 @app.get("/api/books/")
-def read_books(category: str | None = None, search: str | None = None, db: Session = Depends(get_db)):
-    return crud.get_books(db, category=category, search=search)
+def read_books(
+    category: str | None = None, 
+    search: str | None = None, 
+    page: int = Query(1, ge=1, description="Número de página"),
+    per_page: int = Query(20, ge=1, le=100, description="Libros por página"),
+    db: Session = Depends(get_db)
+):
+    return crud.get_books(db, category=category, search=search, page=page, per_page=per_page)
 
 @app.get("/api/categories/", response_model=List[str])
 def read_categories(db: Session = Depends(get_db)):
@@ -1412,14 +1472,25 @@ async def upload_bulk_books(
         
         # Agregar resultados de duplicados detectados en verificación previa
         for duplicate in duplicate_files:
+            existing_book_dict = None
+            if duplicate.get("existing_book"):
+                existing_book = duplicate["existing_book"]
+                existing_book_dict = {
+                    "id": existing_book.id,
+                    "title": existing_book.title,
+                    "author": existing_book.author,
+                    "category": existing_book.category
+                }
+            
             results.append({
                 "success": False,
-                "file": duplicate,
+                "file": duplicate["file"],
                 "error": "Duplicado detectado (verificación previa)",
                 "duplicate_info": {
                     "is_duplicate": True,
-                    "reason": "Archivo ya existe en la base de datos",
-                    "message": "Este archivo ya ha sido procesado anteriormente"
+                    "reason": duplicate.get("reason", "Archivo ya existe en la base de datos"),
+                    "existing_book": existing_book_dict,
+                    "message": duplicate.get("message", "Este archivo ya ha sido procesado anteriormente")
                 }
             })
         
@@ -1533,14 +1604,25 @@ async def upload_bulk_books_local(
         
         # Agregar resultados de duplicados detectados en verificación previa
         for duplicate in duplicate_files:
+            existing_book_dict = None
+            if duplicate.get("existing_book"):
+                existing_book = duplicate["existing_book"]
+                existing_book_dict = {
+                    "id": existing_book.id,
+                    "title": existing_book.title,
+                    "author": existing_book.author,
+                    "category": existing_book.category
+                }
+            
             results.append({
                 "success": False,
-                "file": duplicate,
+                "file": duplicate["file"],
                 "error": "Duplicado detectado (verificación previa)",
                 "duplicate_info": {
                     "is_duplicate": True,
-                    "reason": "Archivo ya existe en la base de datos",
-                    "message": "Este archivo ya ha sido procesado anteriormente"
+                    "reason": duplicate.get("reason", "Archivo ya existe en la base de datos"),
+                    "existing_book": existing_book_dict,
+                    "message": duplicate.get("message", "Este archivo ya ha sido procesado anteriormente")
                 }
             })
         
@@ -1657,7 +1739,13 @@ async def upload_folder_books(
             "duplicates": len(duplicates),
             "successful_books": successful,
             "failed_files": failed,
-            "duplicate_files": duplicates
+            "duplicate_files": duplicates,
+            "optimization_stats": {
+                "total_files": len(book_files),
+                "unique_files": len(successful),
+                "duplicate_files": len(duplicates),
+                "saved_ai_calls": len(duplicates)
+            }
         }
         
     except HTTPException:
@@ -1710,7 +1798,7 @@ async def upload_folder_books_local(
         
         # Procesar libros en paralelo usando ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Crear tareas para cada libro
+            # Crear tareas para cada libro (MODO LOCAL)
             future_to_file = {
                 executor.submit(process_single_book_local_async, file_path, STATIC_COVERS_DIR, db): file_path
                 for file_path in book_files
@@ -1734,7 +1822,13 @@ async def upload_folder_books_local(
             "duplicates": len(duplicates),
             "successful_books": successful,
             "failed_files": failed,
-            "duplicate_files": duplicates
+            "duplicate_files": duplicates,
+            "optimization_stats": {
+                "total_files": len(book_files),
+                "unique_files": len(successful),
+                "duplicate_files": len(duplicates),
+                "saved_ai_calls": len(duplicates)
+            }
         }
         
     except HTTPException:
@@ -2040,13 +2134,19 @@ def test_duplicate_detection(db: Session = Depends(get_db)):
 
 
 @app.get("/api/drive/books/")
-def get_drive_books(category: str | None = None, search: str | None = None, db: Session = Depends(get_db)):
+def get_drive_books(
+    category: str | None = None, 
+    search: str | None = None, 
+    page: int = Query(1, ge=1, description="Número de página"),
+    per_page: int = Query(20, ge=1, le=100, description="Libros por página"),
+    db: Session = Depends(get_db)
+):
     """
-    Obtiene libros desde la base de datos que están en Google Drive
+    Obtiene libros desde la base de datos que están en Google Drive con paginación
     """
     try:
         # Obtener libros de la base de datos que están en Google Drive
-        books = crud.get_drive_books(db, category=category, search=search)
+        books = crud.get_drive_books(db, category=category, search=search, page=page, per_page=per_page)
         
         # Los libros ya vienen como diccionarios desde crud.get_drive_books
         return books
@@ -2639,8 +2739,22 @@ def process_book_with_cover(file_path: str, static_dir: str, title: str, author:
             print("📁 Manteniendo portada local (evitando errores SSL)")
         else:
             print("❌ El archivo de portada no existe localmente")
+            cover_image_url = None
     else:
         print("❌ No se encontró imagen de portada en el libro")
+    
+    # Si no se encontró portada local, intentar búsqueda online con información de la IA
+    if not cover_image_url and title and title != "Desconocido":
+        print("🔍 Intentando búsqueda de portada online con información de la IA...")
+        try:
+            online_cover = cover_search.search_book_cover_online(title, author, static_dir)
+            if online_cover:
+                cover_image_url = online_cover
+                print(f"✅ Portada online encontrada con IA: {online_cover}")
+            else:
+                print("❌ No se pudo encontrar portada online con información de la IA")
+        except Exception as e:
+            print(f"❌ Error en búsqueda de portada online con IA: {e}")
     
     print(f"🖼️ URL final de portada: {cover_image_url}")
     
@@ -2870,6 +2984,699 @@ def process_single_book_bulk_cloud_async(file_path: str, static_dir: str, db: Se
             "file": file_path,
             "error": f"Error durante el procesamiento masivo: {str(e)}"
         }
+
+@app.post("/api/books/{book_id}/search-cover-online")
+async def search_cover_online(
+    book_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Busca una portada online para un libro existente
+    """
+    try:
+        # Obtener el libro de la base de datos
+        book = crud.get_book(db, book_id=book_id)
+        if not book:
+            raise HTTPException(status_code=404, detail="Libro no encontrado")
+        
+        print(f"🔍 Buscando portada online para: '{book.title}' por '{book.author}'")
+        
+        # Buscar portada online
+        online_cover = cover_search.search_book_cover_online(book.title, book.author, "static/covers")
+        
+        if online_cover:
+            # Actualizar el libro con la nueva portada
+            book_update = {"cover_image_url": online_cover}
+            updated_book = crud.update_book(db, book_id=book_id, book_update=book_update)
+            
+            return {
+                "success": True,
+                "message": f"Portada online encontrada y actualizada: {online_cover}",
+                "cover_url": online_cover,
+                "book": {
+                    "id": updated_book.id,
+                    "title": updated_book.title,
+                    "author": updated_book.author,
+                    "cover_image_url": updated_book.cover_image_url
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "message": "No se pudo encontrar una portada online para este libro"
+            }
+            
+    except Exception as e:
+        logger.error(f"Error al buscar portada online: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al buscar portada online: {str(e)}")
+
+@app.post("/api/books/{book_id}/update-cover")
+async def update_book_cover(
+    book_id: int, 
+    cover_file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Actualiza la portada de un libro
+    """
+    try:
+        # Verificar que el libro existe
+        book = crud.get_book(db, book_id)
+        if not book:
+            raise HTTPException(status_code=404, detail="Libro no encontrado")
+        
+        # Verificar que el archivo es una imagen
+        if not cover_file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="El archivo debe ser una imagen")
+        
+        # Leer el contenido del archivo para generar hash
+        content = await cover_file.read()
+        import hashlib
+        file_hash = hashlib.md5(content).hexdigest()
+        
+        # Verificar si ya existe una portada con el mismo hash
+        existing_cover = None
+        covers_dir = os.path.join("static", "covers")
+        for filename in os.listdir(covers_dir):
+            if filename.startswith(f"cover_{book_id}_"):
+                file_path = os.path.join(covers_dir, filename)
+                try:
+                    with open(file_path, 'rb') as f:
+                        existing_content = f.read()
+                        existing_hash = hashlib.md5(existing_content).hexdigest()
+                        if existing_hash == file_hash:
+                            existing_cover = filename
+                            break
+                except:
+                    continue
+        
+        # Si ya existe una portada idéntica, no hacer nada
+        if existing_cover:
+            return {
+                "message": "La portada ya existe y es idéntica", 
+                "cover_url": f"/static/covers/{existing_cover}"
+            }
+        
+        # Generar nombre único para la portada
+        file_extension = os.path.splitext(cover_file.filename)[1]
+        cover_filename = f"cover_{book_id}_{int(time.time())}{file_extension}"
+        cover_path = os.path.join("static", "covers", cover_filename)
+        
+        # Guardar la nueva portada
+        with open(cover_path, "wb") as buffer:
+            buffer.write(content)
+        
+        # Eliminar la portada anterior si existe
+        if book.cover_image_url:
+            old_cover_path = book.cover_image_url.replace("http://localhost:8001/static/covers/", "")
+            old_cover_full_path = os.path.join("static", "covers", old_cover_path)
+            if os.path.exists(old_cover_full_path):
+                os.remove(old_cover_full_path)
+        
+        # Actualizar la base de datos
+        book.cover_image_url = f"/static/covers/{cover_filename}"
+        db.commit()
+        
+        return {"message": "Portada actualizada exitosamente", "cover_url": book.cover_image_url}
+        
+    except Exception as e:
+        logger.error(f"Error actualizando portada: {e}")
+        raise HTTPException(status_code=500, detail="Error al actualizar la portada")
+
+@app.put("/api/books/{book_id}")
+async def update_book(
+    book_id: int,
+    book_update: dict,
+    db: Session = Depends(get_db)
+):
+    """
+    Actualiza los datos de un libro (título, autor, categoría)
+    """
+    try:
+        book = crud.get_book(db, book_id)
+        if not book:
+            raise HTTPException(status_code=404, detail="Libro no encontrado")
+        
+        # Actualizar campos permitidos
+        if 'title' in book_update:
+            book.title = book_update['title']
+        if 'author' in book_update:
+            book.author = book_update['author']
+        if 'category' in book_update:
+            book.category = book_update['category']
+        
+        db.commit()
+        db.refresh(book)
+        
+        return book
+        
+    except Exception as e:
+        logger.error(f"Error actualizando libro: {e}")
+        raise HTTPException(status_code=500, detail="Error al actualizar el libro")
+
+@app.post("/api/categories/")
+async def create_category(
+    category_data: dict,
+    db: Session = Depends(get_db)
+):
+    """
+    Crea una nueva categoría y la sincroniza con la nube
+    """
+    try:
+        category_name = category_data.get('name')
+        if not category_name:
+            raise HTTPException(status_code=400, detail="El nombre de la categoría es requerido")
+        
+        # Verificar si la categoría ya existe
+        existing_books = crud.get_books_by_category(db, category_name)
+        if existing_books:
+            return {"message": "La categoría ya existe", "category": category_name}
+        
+        # Crear la categoría (se crea automáticamente al agregar un libro)
+        # Aquí solo verificamos que se pueda crear
+        return {"message": "Categoría creada exitosamente", "category": category_name}
+        
+    except Exception as e:
+        logger.error(f"Error creando categoría: {e}")
+        raise HTTPException(status_code=500, detail="Error al crear la categoría")
+
+@app.get("/api/books/{book_id}/open")
+async def open_local_book(
+    book_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Abre un libro local para lectura
+    """
+    try:
+        book = crud.get_book(db, book_id)
+        if not book:
+            raise HTTPException(status_code=404, detail="Libro no encontrado")
+        
+        # Verificar que el libro tiene archivo local
+        if not book.file_path or not os.path.exists(book.file_path):
+            raise HTTPException(status_code=404, detail="Archivo del libro no encontrado")
+        
+        # Servir el archivo
+        return FileResponse(
+            book.file_path,
+            media_type='application/octet-stream',
+            filename=os.path.basename(book.file_path)
+        )
+        
+    except Exception as e:
+        logger.error(f"Error abriendo libro: {e}")
+        raise HTTPException(status_code=500, detail="Error al abrir el libro")
+
+@app.delete("/api/covers/{cover_filename}")
+async def delete_cover(
+    cover_filename: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Elimina una portada específica
+    """
+    try:
+        cover_path = os.path.join("static", "covers", cover_filename)
+        if os.path.exists(cover_path):
+            os.remove(cover_path)
+            return {"message": "Portada eliminada exitosamente"}
+        else:
+            raise HTTPException(status_code=404, detail="Portada no encontrada")
+            
+    except Exception as e:
+        logger.error(f"Error eliminando portada: {e}")
+        raise HTTPException(status_code=500, detail="Error al eliminar la portada")
+
+@app.post("/api/books/bulk-search-covers")
+async def bulk_search_covers(
+    book_ids: List[int],
+    db: Session = Depends(get_db)
+):
+    """
+    Busca portadas online para múltiples libros en lote
+    """
+    try:
+        results = []
+        successful = 0
+        failed = 0
+        
+        for book_id in book_ids:
+            try:
+                # Obtener el libro
+                book = crud.get_book(db, book_id=book_id)
+                if not book:
+                    results.append({
+                        "book_id": book_id,
+                        "success": False,
+                        "message": "Libro no encontrado"
+                    })
+                    failed += 1
+                    continue
+                
+                # Buscar portada online
+                online_cover = cover_search.search_book_cover_online(book.title, book.author, "static/covers")
+                
+                if online_cover:
+                    # Actualizar el libro
+                    book_update = {"cover_image_url": online_cover}
+                    updated_book = crud.update_book(db, book_id=book_id, book_update=book_update)
+                    
+                    results.append({
+                        "book_id": book_id,
+                        "success": True,
+                        "message": f"Portada encontrada: {online_cover}",
+                        "cover_url": online_cover,
+                        "title": book.title
+                    })
+                    successful += 1
+                else:
+                    results.append({
+                        "book_id": book_id,
+                        "success": False,
+                        "message": "No se encontró portada online",
+                        "title": book.title
+                    })
+                    failed += 1
+                    
+            except Exception as e:
+                results.append({
+                    "book_id": book_id,
+                    "success": False,
+                    "message": f"Error: {str(e)}"
+                })
+                failed += 1
+        
+        return {
+            "success": True,
+            "message": f"Búsqueda completada: {successful} exitosas, {failed} fallidas",
+            "total_books": len(book_ids),
+            "successful": successful,
+            "failed": failed,
+            "results": results
+        }
+        
+    except Exception as e:
+        logger.error(f"Error en búsqueda masiva de portadas: {e}")
+        raise HTTPException(status_code=500, detail=f"Error en búsqueda masiva: {str(e)}")
+
+@app.post("/api/covers/cleanup")
+async def cleanup_orphaned_covers(db: Session = Depends(get_db)):
+    """
+    Limpia portadas huérfanas que no están asociadas a ningún libro
+    Solo elimina archivos que no están siendo utilizados por libros activos
+    """
+    try:
+        covers_dir = os.path.join("static", "covers")
+        if not os.path.exists(covers_dir):
+            return {"message": "No existe el directorio de portadas", "deleted_count": 0}
+        
+        # Obtener todas las portadas en uso
+        books = db.query(models.Book).all()
+        used_covers = set()
+        
+        for book in books:
+            if book.cover_image_url:
+                # Extraer el nombre del archivo de la URL de diferentes formatos
+                cover_filename = None
+                
+                if book.cover_image_url.startswith('/static/covers/'):
+                    cover_filename = book.cover_image_url.replace('/static/covers/', '')
+                elif book.cover_image_url.startswith('http://localhost:8001/static/covers/'):
+                    cover_filename = book.cover_image_url.replace('http://localhost:8001/static/covers/', '')
+                elif '/' not in book.cover_image_url and '.' in book.cover_image_url:
+                    # Es solo el nombre del archivo
+                    cover_filename = book.cover_image_url
+                elif 'drive.google.com' in book.cover_image_url:
+                    # Es una URL de Google Drive, extraer el ID del archivo
+                    if '/file/d/' in book.cover_image_url:
+                        file_id = book.cover_image_url.split('/file/d/')[1].split('/')[0]
+                        cover_filename = f"drive_cover_{file_id}.png"
+                
+                if cover_filename:
+                    used_covers.add(cover_filename)
+                    logger.info(f"Portada en uso: {cover_filename} (libro ID: {book.id})")
+        
+        # Buscar portadas huérfanas
+        orphaned_covers = []
+        total_files = 0
+        
+        for filename in os.listdir(covers_dir):
+            if filename.endswith(('.png', '.jpg', '.jpeg')):
+                total_files += 1
+                if filename not in used_covers:
+                    orphaned_covers.append(filename)
+                    logger.info(f"Portada huérfana detectada: {filename}")
+        
+        # Eliminar portadas huérfanas
+        deleted_count = 0
+        deleted_files = []
+        
+        for filename in orphaned_covers:
+            try:
+                file_path = os.path.join(covers_dir, filename)
+                file_size = os.path.getsize(file_path)
+                os.remove(file_path)
+                deleted_count += 1
+                deleted_files.append({
+                    "filename": filename,
+                    "size_mb": round(file_size / (1024 * 1024), 2)
+                })
+                logger.info(f"✅ Portada huérfana eliminada: {filename} ({round(file_size / (1024 * 1024), 2)} MB)")
+            except Exception as e:
+                logger.error(f"❌ Error eliminando portada {filename}: {e}")
+        
+        # Calcular espacio liberado
+        total_size_freed = sum(file["size_mb"] for file in deleted_files)
+        
+        return {
+            "message": f"Limpieza completada. {deleted_count} portadas huérfanas eliminadas de {total_files} archivos totales. {total_size_freed} MB liberados.",
+            "deleted_count": deleted_count,
+            "total_files": total_files,
+            "used_covers": len(used_covers),
+            "size_freed_mb": total_size_freed,
+            "deleted_files": deleted_files,
+            "orphaned_covers": orphaned_covers
+        }
+        
+    except Exception as e:
+        logger.error(f"Error en limpieza de portadas: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al limpiar portadas: {str(e)}")
+
+@app.post("/api/cleanup-temp-files")
+async def cleanup_temp_files():
+    """
+    Limpia todos los archivos temporales generados por la aplicación
+    """
+    try:
+        temp_directories = [
+            "temp_processing",
+            "temp_bulk_upload", 
+            "temp_downloads",
+            "temp_books"
+        ]
+        
+        total_deleted = 0
+        total_size_freed = 0
+        cleanup_results = {}
+        
+        for temp_dir in temp_directories:
+            if os.path.exists(temp_dir):
+                try:
+                    # Contar archivos y calcular tamaño antes de eliminar
+                    file_count = 0
+                    dir_size = 0
+                    
+                    for root, dirs, files in os.walk(temp_dir):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            try:
+                                dir_size += os.path.getsize(file_path)
+                                file_count += 1
+                            except OSError:
+                                pass
+                    
+                    # Eliminar directorio completo
+                    shutil.rmtree(temp_dir)
+                    
+                    # Recrear directorio vacío
+                    os.makedirs(temp_dir, exist_ok=True)
+                    
+                    cleanup_results[temp_dir] = {
+                        "files_deleted": file_count,
+                        "size_freed_mb": round(dir_size / (1024 * 1024), 2),
+                        "status": "success"
+                    }
+                    
+                    total_deleted += file_count
+                    total_size_freed += dir_size
+                    
+                    logger.info(f"🗑️ Directorio temporal limpiado: {temp_dir} ({file_count} archivos, {round(dir_size / (1024 * 1024), 2)} MB)")
+                    
+                except Exception as e:
+                    cleanup_results[temp_dir] = {
+                        "files_deleted": 0,
+                        "size_freed_mb": 0,
+                        "status": "error",
+                        "error": str(e)
+                    }
+                    logger.error(f"⚠️ Error al limpiar directorio {temp_dir}: {e}")
+            else:
+                cleanup_results[temp_dir] = {
+                    "files_deleted": 0,
+                    "size_freed_mb": 0,
+                    "status": "not_found"
+                }
+        
+        return {
+            "message": f"Limpieza de archivos temporales completada. {total_deleted} archivos eliminados, {round(total_size_freed / (1024 * 1024), 2)} MB liberados.",
+            "total_files_deleted": total_deleted,
+            "total_size_freed_mb": round(total_size_freed / (1024 * 1024), 2),
+            "directories_cleaned": cleanup_results
+        }
+        
+    except Exception as e:
+        logger.error(f"Error durante la limpieza de archivos temporales: {e}")
+        raise HTTPException(status_code=500, detail=f"Error durante la limpieza de archivos temporales: {str(e)}")
+
+@app.post("/api/upload-folder-local/", response_model=schemas.BulkUploadResponse)
+async def upload_folder_books_local(
+    folder_path: str = Query(..., description="Ruta de la carpeta a procesar"),
+    db: Session = Depends(get_db)
+):
+    """
+    Carga masiva de libros desde una carpeta específica del sistema (MODO LOCAL)
+    """
+    try:
+        # Verificar que la carpeta existe
+        if not os.path.exists(folder_path) or not os.path.isdir(folder_path):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"La carpeta especificada no existe o no es un directorio válido: {folder_path}"
+            )
+        
+        # Encontrar todos los archivos de libros y ZIPs que contengan libros
+        all_files = find_book_files(folder_path)
+        
+        # Separar archivos directos de libros y ZIPs
+        direct_books = [f for f in all_files if Path(f).suffix.lower() in {'.pdf', '.epub'}]
+        zip_files = [f for f in all_files if Path(f).suffix.lower() == '.zip']
+        
+        # Procesar ZIPs que contengan libros
+        books_from_zips = []
+        for zip_file in zip_files:
+            extracted_books = process_zip_containing_books(zip_file, folder_path)
+            books_from_zips.extend(extracted_books)
+        
+        # Combinar todos los libros encontrados
+        book_files = direct_books + books_from_zips
+        
+        if not book_files:
+            raise HTTPException(
+                status_code=400, 
+                detail="No se encontraron archivos PDF o EPUB válidos en la carpeta ni en los ZIPs contenidos."
+            )
+        
+        # Configurar el procesamiento concurrente
+        max_workers = min(2, len(book_files))  # Máximo 2 workers concurrentes
+        results = []
+        
+        # Procesar libros en paralelo usando ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Crear tareas para cada libro (MODO LOCAL)
+            future_to_file = {
+                executor.submit(process_single_book_local_async, file_path, STATIC_COVERS_DIR, db): file_path
+                for file_path in book_files
+            }
+            
+            # Recolectar resultados
+            for future in as_completed(future_to_file):
+                result = future.result()
+                results.append(result)
+        
+        # Resumen de resultados
+        successful = [r for r in results if r["success"]]
+        failed = [r for r in results if not r["success"] and r.get("error") != "Duplicado detectado (verificación rápida)" and r.get("error") != "Duplicado detectado (verificación final)"]
+        duplicates = [r for r in results if not r["success"] and (r.get("error") == "Duplicado detectado (verificación rápida)" or r.get("error") == "Duplicado detectado (verificación final)")]
+        
+        return {
+            "message": f"Procesamiento completado. {len(successful)} libros procesados exitosamente, {len(failed)} fallaron, {len(duplicates)} duplicados detectados.",
+            "total_files": len(book_files),
+            "successful": len(successful),
+            "failed": len(failed),
+            "duplicates": len(duplicates),
+            "successful_books": successful,
+            "failed_files": failed,
+            "duplicate_files": duplicates,
+            "optimization_stats": {
+                "total_files": len(book_files),
+                "unique_files": len(successful),
+                "duplicate_files": len(duplicates),
+                "saved_ai_calls": len(duplicates)
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error durante la carga de carpeta local: {e}")
+        raise HTTPException(status_code=500, detail=f"Error durante la carga de carpeta local: {str(e)}")
+
+@app.post("/api/upload-drive-folder/", response_model=schemas.BulkUploadResponse)
+async def upload_drive_folder_books(
+    folder_data: dict,
+    db: Session = Depends(get_db)
+):
+    """
+    Carga masiva de libros desde una carpeta pública de Google Drive (MODO NUBE)
+    """
+    folder_url = folder_data.get('folder_url')
+    if not folder_url:
+        raise HTTPException(status_code=400, detail="Se requiere la URL de la carpeta de Google Drive")
+    
+    # Verificar que Google Drive esté configurado
+    try:
+        from google_drive_manager import get_drive_manager
+        drive_manager = get_drive_manager()
+        if not drive_manager.service:
+            raise HTTPException(
+                status_code=503, 
+                detail="Google Drive no está configurado. Configure Google Drive antes de subir libros."
+            )
+    except ImportError:
+        raise HTTPException(
+            status_code=503, 
+            detail="Google Drive no está disponible. Instale las dependencias necesarias."
+        )
+    
+    temp_dir = None
+    try:
+        # Crear directorio temporal para descargar archivos
+        temp_dir = "temp_drive_upload"
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        # Procesar la carpeta pública recursivamente
+        print(f"🔍 Procesando carpeta pública: {folder_url}")
+        
+        # Verificar accesibilidad de la carpeta primero
+        print(f"🔍 Verificando accesibilidad de la carpeta...")
+        accessibility_check = drive_manager.check_folder_accessibility(folder_url)
+        
+        if not accessibility_check["success"]:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Error de accesibilidad: {accessibility_check['error']}"
+            )
+        
+        print(f"✅ Carpeta accesible - Propietario: {accessibility_check.get('owner', 'Desconocido')}")
+        
+        folder_result = drive_manager.process_public_folder_recursively(folder_url, temp_dir)
+        
+        if not folder_result["success"]:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Error al procesar la carpeta: {folder_result['error']}"
+            )
+        
+        books_info = folder_result["books"]
+        folder_info = folder_result["folder_info"]
+        
+        if not books_info:
+            raise HTTPException(
+                status_code=400, 
+                detail="No se encontraron archivos PDF o EPUB válidos en la carpeta pública."
+            )
+        
+        print(f"📚 Libros encontrados: {len(books_info)}")
+        
+        # Descargar y procesar cada libro
+        results = []
+        successful = 0
+        failed = 0
+        duplicates = 0
+        
+        for i, book_info in enumerate(books_info):
+            try:
+                print(f"📖 Procesando libro {i + 1}/{len(books_info)}: {book_info['name']}")
+                
+                # Descargar archivo desde Google Drive
+                download_result = drive_manager.download_file_from_drive(book_info['id'], temp_dir)
+                
+                if not download_result["success"]:
+                    print(f"❌ Error al descargar {book_info['name']}: {download_result['error']}")
+                    results.append({
+                        "success": False,
+                        "file": book_info['name'],
+                        "error": f"Error al descargar: {download_result['error']}"
+                    })
+                    failed += 1
+                    continue
+                
+                file_path = download_result["file_path"]
+                
+                # Procesar el libro (modo nube)
+                result = process_single_book_bulk_cloud_async(file_path, STATIC_COVERS_DIR, db)
+                
+                if result["success"]:
+                    successful += 1
+                    print(f"✅ {book_info['name']} procesado exitosamente")
+                else:
+                    if "Duplicado detectado" in result.get("error", ""):
+                        duplicates += 1
+                        print(f"⚠️ {book_info['name']} es un duplicado")
+                    else:
+                        failed += 1
+                        print(f"❌ Error procesando {book_info['name']}: {result.get('error')}")
+                
+                results.append(result)
+                
+                # Limpiar archivo temporal
+                try:
+                    os.remove(file_path)
+                except:
+                    pass
+                
+            except Exception as e:
+                print(f"❌ Error procesando {book_info['name']}: {e}")
+                results.append({
+                    "success": False,
+                    "file": book_info['name'],
+                    "error": f"Error de procesamiento: {str(e)}"
+                })
+                failed += 1
+        
+        # Resumen final
+        print(f"🎉 Procesamiento completado: {successful} exitosos, {failed} fallidos, {duplicates} duplicados")
+        
+        return {
+            "message": f"Procesamiento completado. {successful} libros procesados exitosamente, {failed} fallaron, {duplicates} duplicados detectados.",
+            "total_files": len(books_info),
+            "successful": successful,
+            "failed": failed,
+            "duplicates": duplicates,
+            "successful_books": [r for r in results if r["success"]],
+            "failed_files": [r for r in results if not r["success"] and "Duplicado detectado" not in r.get("error", "")],
+            "duplicate_files": [r for r in results if not r["success"] and "Duplicado detectado" in r.get("error", "")],
+            "optimization_stats": {
+                "total_files": len(books_info),
+                "unique_files": successful,
+                "duplicate_files": duplicates,
+                "saved_ai_calls": duplicates  # Cada duplicado evita una llamada a la IA
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error durante la carga de carpeta de Drive: {e}")
+        raise HTTPException(status_code=500, detail=f"Error durante la carga de carpeta de Drive: {str(e)}")
+    finally:
+        # Limpiar directorio temporal
+        if temp_dir and os.path.exists(temp_dir):
+            try:
+                shutil.rmtree(temp_dir)
+            except OSError:
+                pass  # Ignorar errores de limpieza
 
 if __name__ == "__main__":
     import uvicorn

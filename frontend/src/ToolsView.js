@@ -101,7 +101,12 @@ function ToolsView() {
   const { driveStatus } = useDriveStatus();
 
   return (
+    
     <div className="tools-container">
+      <div className="tools-grid">
+        <EpubToPdfConverter />
+        {/* Aquí se podrían añadir más herramientas en el futuro */}
+      </div>
       <h2>Herramientas de la Biblioteca</h2>
       
       {/* Información de Google Drive */}
@@ -128,10 +133,7 @@ function ToolsView() {
         </div>
       </div>
 
-      <div className="tools-grid">
-        <EpubToPdfConverter />
-        {/* Aquí se podrían añadir más herramientas en el futuro */}
-      </div>
+      
     </div>
   );
 }

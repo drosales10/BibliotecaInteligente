@@ -1,5 +1,7 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Generic, TypeVar
+
+T = TypeVar('T')
 
 class BookBase(BaseModel):
     title: str
@@ -58,3 +60,16 @@ class BulkUploadResponse(BaseModel):
     failed_files: List[BulkUploadResult]
     duplicate_files: List[BulkUploadResult]
     optimization_stats: OptimizationStats
+
+# Esquemas de paginación
+class PaginationInfo(BaseModel):
+    page: int
+    per_page: int
+    total: int
+    total_pages: int
+    has_next: bool
+    has_prev: bool
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    items: List[T]
+    pagination: PaginationInfo

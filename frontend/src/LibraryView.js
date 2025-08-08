@@ -2,74 +2,85 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, Link, useLocation } from 'react-router-dom';
 import { useBookService } from './hooks/useBookService';
 import { useAppMode } from './contexts/AppModeContext';
+import { usePagination } from './hooks/usePagination';
+import useLoadingState from './hooks/useLoadingState';
+import useAdvancedSearch from './hooks/useAdvancedSearch';
 import SyncToDriveButton from './components/SyncToDriveButton';
 import BulkSyncToDriveButton from './components/BulkSyncToDriveButton';
+import PaginationControls from './components/PaginationControls';
+import LazyImage from './components/LazyImage';
+import BookCardSkeleton, { BookCardSkeletonGrid } from './components/BookCardSkeleton';
+import LoadingSpinner, { LoadingOverlay, LoadingInline } from './components/LoadingSpinner';
+import ProgressIndicator, { IndeterminateProgress } from './components/ProgressIndicator';
+import AdvancedSearchBar from './components/AdvancedSearchBar';
+import SearchFilters from './components/SearchFilters';
+import FilterChips from './components/FilterChips';
+import BookEditModal from './components/BookEditModal';
+import CleanupCoversButton from './components/CleanupCoversButton';
+import CleanupTempFilesButton from './components/CleanupTempFilesButton';
 import './LibraryView.css';
 
-// Hook personalizado para debounce
-const useDebounce = (value, delay) => {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-  return debouncedValue;
-};
 
-// Componente para la portada (con fallback a genérica)
-const BookCover = ({ src, alt, title }) => {
-  const [hasError, setHasError] = useState(false);
-  useEffect(() => { setHasError(false); }, [src]);
-  const handleError = () => { 
-    console.error('❌ Error cargando imagen:', src);
-    setHasError(true); 
-  };
 
-  // Función para obtener la URL correcta de la imagen
-  const getImageUrl = (imageSrc) => {
-    if (!imageSrc) {
-      return '';
-    }
-    
-    // Si es una URL completa (Google Drive), usar el endpoint del backend
-    if (imageSrc.startsWith('http') && imageSrc.includes('drive.google.com')) {
-      // Extraer el file_id de la URL de Google Drive
-      // Formato: https://drive.google.com/file/d/{file_id}/view?usp=drivesdk
-      if (imageSrc.includes('/file/d/')) {
-        const fileId = imageSrc.split('/file/d/')[1].split('/')[0];
-        const backendUrl = `http://localhost:8001/api/drive/cover/${fileId}`;
-        return backendUrl;
-      }
-      
-      return imageSrc;
-    }
-    
-    // Si es una ruta local, construir la URL completa
-    if (imageSrc.startsWith('/')) {
-      return `http://localhost:8001${imageSrc}`;
-    }
-    
-    // Si es solo el nombre del archivo, construir la URL correcta
-    // Las imágenes se guardan en static/covers/, pero se sirven desde /static/
-    return `http://localhost:8001/static/covers/${imageSrc}`;
-  };
-
-  const imageUrl = getImageUrl(src);
-
-  if (hasError || !imageUrl) {
-    const initial = title ? title[0].toUpperCase() : '?';
-    return (
-      <div className="generic-cover">
-        <span className="generic-cover-initial">{initial}</span>
-      </div>
-    );
+// Función para obtener la URL correcta de la imagen
+const getImageUrl = (imageSrc) => {
+  if (!imageSrc) {
+    return '';
   }
   
-  return <img src={imageUrl} alt={alt} className="book-cover" onError={handleError} />;
+  // Si es una URL completa (Google Drive), usar el endpoint del backend
+  if (imageSrc.startsWith('http') && imageSrc.includes('drive.google.com')) {
+    // Extraer el file_id de la URL de Google Drive
+    // Formato: https://drive.google.com/file/d/{file_id}/view?usp=drivesdk
+    if (imageSrc.includes('/file/d/')) {
+      const fileId = imageSrc.split('/file/d/')[1].split('/')[0];
+      const backendUrl = `http://localhost:8001/api/drive/cover/${fileId}`;
+      return backendUrl;
+    }
+    
+    return imageSrc;
+  }
+  
+  // Si es una ruta local, construir la URL completa
+  if (imageSrc.startsWith('/')) {
+    return `http://localhost:8001${imageSrc}`;
+  }
+  
+  // Si es solo el nombre del archivo, construir la URL correcta
+  // Las imágenes se guardan en static/covers/, pero se sirven desde /static/
+  return `http://localhost:8001/static/covers/${imageSrc}`;
+};
+
+// Componente para la portada con lazy loading
+const BookCover = ({ src, alt, title }) => {
+  const imageUrl = getImageUrl(src);
+  const initial = title ? title[0].toUpperCase() : '?';
+  
+  // Fallback personalizado para libros
+  const fallbackElement = (
+    <div className="generic-cover">
+      <span className="generic-cover-initial">{initial}</span>
+    </div>
+  );
+
+  return (
+    <LazyImage
+      src={imageUrl}
+      alt={alt}
+      title={title}
+      className="book-cover-lazy"
+      variant="book-cover"
+      showSkeleton={true}
+      skeletonProps={{
+        variant: 'book-cover',
+        width: '100%',
+        height: '280px'
+      }}
+      fallback={fallbackElement}
+      threshold={0.1}
+      rootMargin="100px"
+    />
+  );
 };
 
 // Componente para el indicador de ubicación
@@ -139,8 +150,6 @@ const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, bookTitle, isDele
 
 function LibraryView() {
   const [searchParams] = useSearchParams();
-  const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const [deleteModal, setDeleteModal] = useState({ 
     isOpen: false, 
     bookId: null, 
@@ -152,77 +161,183 @@ function LibraryView() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedBooks, setSelectedBooks] = useState(new Set());
   const [books, setBooks] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [editModal, setEditModal] = useState({ 
+    isOpen: false, 
+    book: null 
+  });
+  const [categories, setCategories] = useState([]);
   const location = useLocation();
 
   // Usar los nuevos hooks
-  const { getBooks, deleteBook, appMode } = useBookService();
+  const { getBooks, deleteBook, appMode, getCategories } = useBookService();
   const { isLocalMode, isDriveMode } = useAppMode();
+  
+  // Hook de búsqueda avanzada
+  const {
+    searchTerm,
+    filters,
+    suggestions,
+    searchHistory,
+    isAdvancedMode,
+    isLoading: searchLoading,
+    performSearch,
+    updateSearchTerm,
+    updateFilters,
+    clearSearch,
+    toggleAdvancedMode,
+    removeFilter,
+    clearAllFilters,
+    getActiveFilters
+  } = useAdvancedSearch();
+  
+  // Hook de paginación
+  const {
+    currentPage,
+    perPage,
+    totalItems,
+    totalPages,
+    paginationInfo,
+    goToPage,
+    changePerPage,
+    updatePaginationInfo,
+    resetPagination
+  } = usePagination(1, 20);
+
+  // Hook de estados de carga mejorados
+  const {
+    loadingStates,
+    isLoading,
+    startLoading,
+    stopLoading,
+    withLoading
+  } = useLoadingState({
+    initial: true,
+    search: false,
+    pagination: false,
+    delete: false,
+    bulkDelete: false,
+    sync: false
+  });
 
   // Función para cargar libros
   const fetchBooks = useCallback(async () => {
     try {
-      setLoading(true);
       setError(null);
       
       const category = searchParams.get('category');
-      const booksData = await getBooks(category, debouncedSearchTerm);
+      // Por ahora, usar solo búsqueda simple
+      const searchQuery = searchTerm;
       
-      // Filtrar libros según el modo actual
-      let filteredBooks = booksData;
+      const booksData = await getBooks(category, searchQuery, currentPage, perPage);
       
-      if (isLocalMode) {
-        // En modo local, mostrar solo libros locales (source: 'local' o que no estén en Drive)
-        filteredBooks = booksData.filter(book => 
-          book.source === 'local' || 
-          (!book.synced_to_drive && !book.drive_file_id)
-        );
-      } else if (isDriveMode) {
-        // En modo nube, mostrar solo libros de Drive (source: 'drive' o synced_to_drive: true)
-        filteredBooks = booksData.filter(book => 
-          book.source === 'drive' || 
-          book.synced_to_drive === true ||
-          book.drive_file_id
-        );
+      // Verificar si la respuesta tiene estructura de paginación
+      if (booksData && booksData.items && booksData.pagination) {
+        // Nueva estructura con paginación
+        const { items: booksList, pagination } = booksData;
+        
+        // Filtrar libros según el modo actual
+        let filteredBooks = booksList;
+        
+        if (isLocalMode) {
+          // En modo local, mostrar solo libros locales (source: 'local' o que no estén en Drive)
+          filteredBooks = booksList.filter(book => 
+            book.source === 'local' || 
+            (!book.synced_to_drive && !book.drive_file_id)
+          );
+        } else if (isDriveMode) {
+          // En modo nube, mostrar solo libros de Drive (source: 'drive' o synced_to_drive: true)
+          filteredBooks = booksList.filter(book => 
+            book.source === 'drive' || 
+            book.synced_to_drive === true ||
+            book.drive_file_id
+          );
+        }
+        
+        // Agregar información de ubicación a los libros
+        const booksWithLocation = filteredBooks.map(book => ({
+          ...book,
+          // Asegurar que tenga valores por defecto correctos
+          source: book.source || (book.drive_file_id ? 'drive' : 'local'),
+          synced_to_drive: book.synced_to_drive || false
+        }));
+        
+        setBooks(booksWithLocation);
+        updatePaginationInfo(pagination);
+      } else {
+        // Estructura antigua (sin paginación) - mantener compatibilidad
+        let filteredBooks = booksData;
+        
+        if (isLocalMode) {
+          filteredBooks = booksData.filter(book => 
+            book.source === 'local' || 
+            (!book.synced_to_drive && !book.drive_file_id)
+          );
+        } else if (isDriveMode) {
+          filteredBooks = booksData.filter(book => 
+            book.source === 'drive' || 
+            book.synced_to_drive === true ||
+            book.drive_file_id
+          );
+        }
+        
+        const booksWithLocation = filteredBooks.map(book => ({
+          ...book,
+          source: book.source || (book.drive_file_id ? 'drive' : 'local'),
+          synced_to_drive: book.synced_to_drive || false
+        }));
+        
+        setBooks(booksWithLocation);
+        // Resetear paginación para estructura antigua
+        resetPagination();
       }
-      
-      // Agregar información de ubicación a los libros
-      const booksWithLocation = filteredBooks.map(book => ({
-        ...book,
-        // Asegurar que tenga valores por defecto correctos
-        source: book.source || (book.drive_file_id ? 'drive' : 'local'),
-        synced_to_drive: book.synced_to_drive || false
-      }));
-      
-      setBooks(booksWithLocation);
     } catch (err) {
       console.error('❌ Error en fetchBooks:', err);
       setError(err.message);
       console.error('Error al cargar libros:', err);
-    } finally {
-      setLoading(false);
     }
-  }, [getBooks, searchParams, debouncedSearchTerm, isLocalMode, isDriveMode, appMode]);
+  }, [getBooks, searchParams, searchTerm, filters, isAdvancedMode, isLocalMode, isDriveMode, appMode, currentPage, perPage, updatePaginationInfo, resetPagination]);
 
-  // Efecto para cargar libros al montar el componente
-  useEffect(() => {
+  // Función para actualizar libros manualmente
+  const refreshBooks = useCallback(() => {
     fetchBooks();
   }, [fetchBooks]);
 
+  // Efecto para cargar libros al montar el componente
+  useEffect(() => {
+    withLoading('initial', fetchBooks);
+  }, [fetchBooks, withLoading]);
+
   // Efecto para recargar libros cuando cambia el modo de aplicación
   useEffect(() => {
-    fetchBooks();
-  }, [appMode, isLocalMode, isDriveMode]);
+    withLoading('initial', fetchBooks);
+  }, [appMode, isLocalMode, isDriveMode, withLoading]);
 
   // Efecto para actualizar libros cuando cambia la ubicación (después de añadir un libro)
   useEffect(() => {
     if (location.state?.refreshBooks) {
-      fetchBooks();
+      withLoading('initial', fetchBooks);
       // Limpiar el estado para evitar recargas innecesarias
       window.history.replaceState({}, document.title);
     }
-  }, [location.state, fetchBooks]);
+  }, [location.state, fetchBooks, withLoading]);
+
+  // Efecto para resetear paginación cuando cambia la búsqueda o categoría
+  useEffect(() => {
+    resetPagination();
+  }, [searchTerm, filters, searchParams, resetPagination]);
+
+  // Efecto para recargar libros cuando cambia la paginación
+  useEffect(() => {
+    withLoading('pagination', fetchBooks);
+  }, [currentPage, perPage, withLoading]);
+
+  // Efecto para búsqueda avanzada
+  useEffect(() => {
+    if (isAdvancedMode && (searchTerm || Object.keys(filters).length > 0)) {
+      withLoading('search', fetchBooks);
+    }
+  }, [searchTerm, filters, isAdvancedMode, withLoading, fetchBooks]);
 
   const handleDeleteClick = (bookId, bookTitle) => {
     setDeleteModal({ 
@@ -252,7 +367,7 @@ function LibraryView() {
       
       if (response.ok) {
         // Recargar la lista de libros para actualizar la UI
-        fetchBooks();
+        await withLoading('initial', fetchBooks);
         resetModal();
       } else {
         const errorData = await response.json();
@@ -292,7 +407,7 @@ function LibraryView() {
       }
 
       // Re-fetch books to update the UI
-      fetchBooks();
+      await withLoading('initial', fetchBooks);
       resetModal();
       setSelectionMode(false);
       setSelectedBooks(new Set());
@@ -386,29 +501,16 @@ function LibraryView() {
   // Función para manejar la visualización de PDF
   const handleViewPDF = async (book) => {
     try {
-      // Primero intentar abrir desde local si existe el archivo
-      if (book.file_path && book.source === 'local' && !book.synced_to_drive) {
-        // Intentar abrir el PDF local usando el endpoint correcto
-        const localUrl = `http://localhost:8001/api/books/download/${book.id}`;
-        window.open(localUrl, '_blank');
+      // Verificar si el libro está en modo local o nube
+      if (book.source === 'local' || (!book.synced_to_drive && !book.drive_file_id)) {
+        // Libro local - abrir en nueva pestaña
+        const url = `http://localhost:8001/api/books/download/${book.id}`;
+        window.open(url, '_blank');
         return;
-      }
-      
-      // Si está en Drive o sincronizado, intentar desde Drive
-      if (book.source === 'drive' || book.synced_to_drive) {
-        // Descargar desde Google Drive
-        const response = await fetch(`http://localhost:8001/api/drive/books/${book.id}/content`);
-        if (response.ok) {
-          const result = await response.json();
-          if (result.file_path) {
-            // Abrir el archivo descargado temporalmente
-            window.open(`http://localhost:8001/temp_downloads/${result.file_path}`, '_blank');
-          } else {
-            alert('No se pudo obtener el archivo desde Google Drive');
-          }
-        } else {
-          alert('Error al obtener el archivo desde Google Drive');
-        }
+      } else if (book.source === 'drive' || book.synced_to_drive || book.drive_file_id) {
+        // Libro en Google Drive - abrir en nueva pestaña
+        const url = `http://localhost:8001/api/drive/books/${book.id}/content`;
+        window.open(url, '_blank');
         return;
       }
       
@@ -421,12 +523,133 @@ function LibraryView() {
     }
   };
 
+  const handleEditBook = (book) => {
+    setEditModal({ isOpen: true, book });
+  };
+
+  const handleCloseEditModal = () => {
+    setEditModal({ isOpen: false, book: null });
+  };
+
+  const handleBookUpdate = (updatedBook) => {
+    setBooks(prevBooks => 
+      prevBooks.map(book => 
+        book.id === updatedBook.id ? updatedBook : book
+      )
+    );
+  };
+
+  const handleCategoryCreate = (newCategory) => {
+    setCategories(prev => [...prev, newCategory]);
+  };
+
+  const handleSearchCoverOnline = async (book) => {
+    try {
+      console.log('Buscando portada online para:', book.title);
+      
+      const response = await fetch(`http://localhost:8001/api/books/${book.id}/search-cover-online`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        console.log('Portada encontrada:', data.cover_url);
+        // Actualizar la lista de libros para reflejar el cambio
+        refreshBooks();
+        alert(`✅ Portada encontrada y actualizada: ${data.cover_url}`);
+      } else {
+        console.error('Error al buscar portada:', data.message);
+        alert(`❌ No se pudo encontrar portada online: ${data.message}`);
+      }
+    } catch (error) {
+      console.error('Error al buscar portada online:', error);
+      alert('❌ Error al buscar portada online. Verifica la conexión.');
+    }
+  };
+
+  const handleBulkSearchCovers = async () => {
+    try {
+      console.log('Iniciando búsqueda masiva de portadas para', safeBooks.length, 'libros');
+      
+      // Obtener IDs de libros que no tienen portada o tienen portadas genéricas
+      const booksWithoutCovers = safeBooks.filter(book => 
+        !book.cover_image_url || 
+        book.cover_image_url.includes('generic') ||
+        book.cover_image_url.includes('placeholder')
+      );
+      
+      if (booksWithoutCovers.length === 0) {
+        alert('✅ Todos los libros ya tienen portadas. No es necesario buscar nuevas portadas.');
+        return;
+      }
+      
+      const bookIds = booksWithoutCovers.map(book => book.id);
+      
+      const response = await fetch(`http://localhost:8001/api/books/bulk-search-covers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bookIds),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        console.log('Búsqueda masiva completada:', data);
+        // Actualizar la lista de libros para reflejar los cambios
+        refreshBooks();
+        alert(`✅ Búsqueda masiva completada:\n${data.successful} portadas encontradas\n${data.failed} no encontradas`);
+      } else {
+        console.error('Error en búsqueda masiva:', data.message);
+        alert(`❌ Error en búsqueda masiva: ${data.message}`);
+      }
+    } catch (error) {
+      console.error('Error al realizar búsqueda masiva:', error);
+      alert('❌ Error al realizar búsqueda masiva. Verifica la conexión.');
+    }
+  };
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const cats = await getCategories();
+      setCategories(cats);
+    } catch (error) {
+      console.error('Error cargando categorías:', error);
+    }
+  }, [getCategories]);
+
+  // Cargar categorías al montar el componente
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
   return (
     <div className="library-container">
       <div className="library-header">
-        <h2>Mi Biblioteca</h2>
+        
         <div className="library-actions">
           <BulkSyncToDriveButton books={safeBooks} onSyncComplete={handleSyncComplete} />
+          <CleanupCoversButton onCleanupComplete={() => console.log('Portadas limpiadas')} />
+          <CleanupTempFilesButton onCleanupComplete={(result) => {
+            console.log('Archivos temporales limpiados:', result);
+            // Opcional: mostrar notificación más detallada
+            if (result.total_files_deleted > 0) {
+              alert(`Limpieza completada:\n${result.total_files_deleted} archivos eliminados\n${result.total_size_freed_mb} MB liberados`);
+            }
+          }} />
+          <button 
+            className="bulk-search-covers-btn"
+            onClick={handleBulkSearchCovers}
+            disabled={safeBooks.length === 0}
+            title="Buscar portadas online para todos los libros"
+          >
+            🔍 Buscar Portadas
+          </button>
           <button 
             className={`selection-mode-btn ${selectionMode ? 'active' : ''}`}
             onClick={toggleSelectionMode}
@@ -454,18 +677,67 @@ function LibraryView() {
       </div>
       
       <div className="controls-container">
-        <input
-          type="text"
-          placeholder="Buscar por título, autor o categoría..."
-          className="search-bar"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+        <AdvancedSearchBar
+          searchTerm={searchTerm}
+          onSearchChange={updateSearchTerm}
+          onClear={clearSearch}
+          onToggleAdvanced={toggleAdvancedMode}
+          isAdvancedMode={isAdvancedMode}
+          suggestions={suggestions}
+          searchHistory={searchHistory}
+          isLoading={searchLoading}
+        />
+        
+        {isAdvancedMode && (
+          <SearchFilters
+            filters={filters}
+            onFiltersChange={updateFilters}
+            onClearFilters={clearAllFilters}
+          />
+        )}
+        
+        <FilterChips
+          activeFilters={getActiveFilters()}
+          onRemoveFilter={removeFilter}
+          onClearAll={clearAllFilters}
         />
       </div>
 
       {error && <p className="error-message">{error}</p>}
-      {loading && <p>Cargando libros...</p>}
-      {!loading && booksLength === 0 && !error && <p>No se encontraron libros que coincidan con tu búsqueda.</p>}
+      
+      {/* Estados de carga mejorados */}
+      {isLoading('initial') && (
+        <div className="loading-container">
+          <BookCardSkeletonGrid count={6} variant="default" />
+        </div>
+      )}
+      
+      {isLoading('search') && (
+        <div className="loading-container">
+          <LoadingSpinner 
+            size="medium" 
+            variant="dots" 
+            text="Buscando libros..." 
+            color="primary"
+          />
+        </div>
+      )}
+      
+      {isLoading('pagination') && (
+        <div className="loading-container">
+          <IndeterminateProgress 
+            text="Cargando página..." 
+            variant="default"
+            size="small"
+          />
+        </div>
+      )}
+      
+      {!isLoading('initial') && !isLoading('search') && !isLoading('pagination') && booksLength === 0 && !error && (
+        <div className="empty-state">
+          <p>No se encontraron libros que coincidan con tu búsqueda.</p>
+        </div>
+      )}
 
       <div className="book-grid">
         {safeBooks.map((book) => {
@@ -489,6 +761,22 @@ function LibraryView() {
                 disabled={deletingBookId === book.id || selectionMode}
               >
                 {deletingBookId === book.id ? '⋯' : '×'}
+              </button>
+              <button 
+                onClick={() => handleEditBook(book)} 
+                className="edit-book-btn" 
+                title="Editar libro"
+                disabled={selectionMode}
+              >
+                ✏️
+              </button>
+              <button 
+                onClick={() => handleSearchCoverOnline(book)} 
+                className="search-cover-btn" 
+                title="Buscar portada online"
+                disabled={selectionMode}
+              >
+                🔍
               </button>
               <BookCover 
                 src={book.cover_image_url || ''}
@@ -521,6 +809,26 @@ function LibraryView() {
         })}
       </div>
 
+      {/* Controles de paginación */}
+      {!isLoading('initial') && !isLoading('search') && !isLoading('pagination') && totalPages > 1 && (
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          perPage={perPage}
+          onPageChange={goToPage}
+          onPerPageChange={changePerPage}
+          hasNext={paginationInfo.hasNext}
+          hasPrev={paginationInfo.hasPrev}
+          startItem={paginationInfo.startItem}
+          endItem={paginationInfo.endItem}
+          pageNumbers={paginationInfo.pageNumbers}
+          showPerPageSelector={true}
+          showInfo={true}
+          className="library-pagination"
+        />
+      )}
+
       <DeleteConfirmationModal
         isOpen={deleteModal.isOpen}
         onClose={handleDeleteCancel}
@@ -528,7 +836,16 @@ function LibraryView() {
         bookTitle={deleteModal.bookTitle}
         isDeleting={deletingBookId !== null}
         isMultiple={deleteModal.isMultiple}
-        selectedCount={deleteModal.selectedIds?.length || 0}
+        selectedCount={deleteModal.selectedIds.length}
+      />
+
+      <BookEditModal
+        isOpen={editModal.isOpen}
+        onClose={handleCloseEditModal}
+        book={editModal.book}
+        onUpdate={handleBookUpdate}
+        categories={categories}
+        onCategoryCreate={handleCategoryCreate}
       />
     </div>
   );

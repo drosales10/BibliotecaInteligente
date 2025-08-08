@@ -104,7 +104,10 @@ def is_duplicate_book(db: Session, title: str, author: str, file_path: str = Non
         "message": "No se encontraron duplicados"
     }
 
-def get_books(db: Session, category: str | None = None, search: str | None = None):
+def get_books(db: Session, category: str | None = None, search: str | None = None, page: int = 1, per_page: int = 20):
+    """
+    Obtiene libros con paginación
+    """
     query = db.query(models.Book)
     if category:
         query = query.filter(models.Book.category == category)
@@ -118,7 +121,17 @@ def get_books(db: Session, category: str | None = None, search: str | None = Non
             )
         )
     
-    books = query.order_by(desc(models.Book.id)).all()
+    # Calcular total de registros
+    total = query.count()
+    
+    # Aplicar paginación
+    offset = (page - 1) * per_page
+    books = query.order_by(desc(models.Book.id)).offset(offset).limit(per_page).all()
+    
+    # Calcular información de paginación
+    total_pages = (total + per_page - 1) // per_page
+    has_next = page < total_pages
+    has_prev = page > 1
     
     # Agregar información de source a cada libro
     books_with_source = []
@@ -148,7 +161,17 @@ def get_books(db: Session, category: str | None = None, search: str | None = Non
         }
         books_with_source.append(book_dict)
     
-    return books_with_source
+    return {
+        'items': books_with_source,
+        'pagination': {
+            'page': page,
+            'per_page': per_page,
+            'total': total,
+            'total_pages': total_pages,
+            'has_next': has_next,
+            'has_prev': has_prev
+        }
+    }
 
 def get_categories(db: Session) -> list[str]:
     return [c[0] for c in db.query(models.Book.category).distinct().order_by(models.Book.category).all()]
@@ -453,9 +476,9 @@ def update_book_drive_info(db: Session, book_id: int, drive_file_id: str = None,
         db.rollback()
         return None
 
-def get_drive_books(db: Session, category: str | None = None, search: str | None = None):
+def get_drive_books(db: Session, category: str | None = None, search: str | None = None, page: int = 1, per_page: int = 20):
     """
-    Obtiene libros de la base de datos que están en Google Drive
+    Obtiene libros de la base de datos que están en Google Drive con paginación
     """
     try:
         # Filtrar libros que están en Google Drive (tienen drive_file_id)
@@ -476,8 +499,17 @@ def get_drive_books(db: Session, category: str | None = None, search: str | None
                 (models.Book.category.ilike(search_lower))
             )
         
-        # Ordenar por fecha de carga (más recientes primero)
-        books = query.order_by(models.Book.upload_date.desc()).all()
+        # Calcular total de registros
+        total = query.count()
+        
+        # Aplicar paginación
+        offset = (page - 1) * per_page
+        books = query.order_by(models.Book.upload_date.desc()).offset(offset).limit(per_page).all()
+        
+        # Calcular información de paginación
+        total_pages = (total + per_page - 1) // per_page
+        has_next = page < total_pages
+        has_prev = page > 1
         
         # Convertir a diccionarios
         books_dict = []
@@ -499,9 +531,35 @@ def get_drive_books(db: Session, category: str | None = None, search: str | None
             }
             books_dict.append(book_dict)
         
-        logger.info(f"Obtenidos {len(books_dict)} libros de Google Drive")
-        return books_dict
+        logger.info(f"Obtenidos {len(books_dict)} libros de Google Drive (página {page} de {total_pages})")
+        return {
+            'items': books_dict,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total,
+                'total_pages': total_pages,
+                'has_next': has_next,
+                'has_prev': has_prev
+            }
+        }
         
     except Exception as e:
         logger.error(f"Error al obtener libros de Google Drive: {e}")
-        return []
+        return {
+            'items': [],
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': 0,
+                'total_pages': 0,
+                'has_next': False,
+                'has_prev': False
+            }
+        }
+
+def get_books_by_category(db: Session, category: str):
+    """
+    Obtiene todos los libros de una categoría específica
+    """
+    return db.query(models.Book).filter(models.Book.category == category).all()
