@@ -1,0 +1,474 @@
+.modern-input-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  position: relative;
+}
+
+.modern-input-container--full-width {
+  width: 100%;
+}
+
+.modern-input__label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.modern-input__required {
+  color: var(--error-color);
+  font-weight: 700;
+}
+
+.modern-input__wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.modern-input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-family: inherit;
+  line-height: 1.5;
+  transition: all var(--transition-normal);
+  outline: none;
+  position: relative;
+}
+
+.modern-input::placeholder {
+  color: var(--text-tertiary);
+  opacity: 1;
+}
+
+/* Efecto de focus */
+.modern-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+/* Variantes */
+.modern-input--default {
+  background-color: var(--bg-elevated);
+}
+
+.modern-input--outlined {
+  background-color: transparent;
+  border-width: 2px;
+}
+
+.modern-input--filled {
+  background-color: var(--bg-secondary);
+  border-color: transparent;
+}
+
+.modern-input--filled:focus {
+  background-color: var(--bg-elevated);
+  border-color: var(--primary-color);
+}
+
+/* Tamaños */
+.modern-input--small {
+  padding: var(--space-2) var(--space-3);
+  font-size: 0.875rem;
+}
+
+.modern-input--medium {
+  padding: var(--space-3) var(--space-4);
+  font-size: 1rem;
+}
+
+.modern-input--large {
+  padding: var(--space-4) var(--space-5);
+  font-size: 1.125rem;
+}
+
+/* Estados */
+.modern-input--error {
+  border-color: var(--error-color);
+  background-color: rgba(239, 68, 68, 0.05);
+}
+
+.modern-input--error:focus {
+  border-color: var(--error-color);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.modern-input--success {
+  border-color: var(--success-color);
+  background-color: rgba(16, 185, 129, 0.05);
+}
+
+.modern-input--success:focus {
+  border-color: var(--success-color);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+.modern-input--disabled {
+  background-color: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.modern-input--disabled:focus {
+  border-color: var(--border-light);
+  box-shadow: none;
+  transform: none;
+}
+
+.modern-input--full-width {
+  width: 100%;
+}
+
+/* Iconos */
+.modern-input--with-icon {
+  padding-left: var(--space-10);
+}
+
+.modern-input--icon-right {
+  padding-left: var(--space-4);
+  padding-right: var(--space-10);
+}
+
+.modern-input__icon {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 1.1em;
+  transition: color var(--transition-normal);
+  z-index: 1;
+}
+
+.modern-input__icon--left {
+  left: var(--space-3);
+}
+
+.modern-input__icon--right {
+  right: var(--space-3);
+}
+
+.modern-input:focus + .modern-input__icon,
+.modern-input:focus ~ .modern-input__icon {
+  color: var(--primary-color);
+}
+
+/* Indicadores de estado */
+.modern-input__indicator {
+  position: absolute;
+  right: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1em;
+  font-weight: bold;
+  z-index: 1;
+}
+
+.modern-input__indicator--success {
+  color: var(--success-color);
+}
+
+.modern-input__indicator--error {
+  color: var(--error-color);
+}
+
+/* Mensajes de estado */
+.modern-input__error {
+  color: var(--error-color);
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-top: var(--space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.modern-input__error::before {
+  content: '⚠️';
+  font-size: 0.75em;
+}
+
+.modern-input__success {
+  color: var(--success-color);
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-top: var(--space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.modern-input__success::before {
+  content: '✓';
+  font-size: 0.75em;
+}
+
+/* Animación de entrada */
+.modern-input-container {
+  animation: inputFadeIn var(--transition-slow) ease-out;
+}
+
+@keyframes inputFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Efecto de brillo en hover */
+.modern-input:hover:not(.modern-input--disabled) {
+  border-color: var(--border-medium);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .modern-input--large {
+    padding: var(--space-3) var(--space-4);
+    font-size: 1rem;
+  }
+  
+  .modern-input--medium {
+    padding: var(--space-2) var(--space-3);
+    font-size: 0.9rem;
+  }
+  
+  .modern-input--small {
+    padding: var(--space-1) var(--space-2);
+    font-size: 0.8rem;
+  }
+  
+  .modern-input__label {
+    font-size: 0.8rem;
+  }
+  
+  .modern-input__error,
+  .modern-input__success {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .modern-input {
+    font-size: 16px; /* Evita zoom en iOS */
+  }
+  
+  .modern-input--large {
+    padding: var(--space-3) var(--space-4);
+  }
+  
+  .modern-input--medium {
+    padding: var(--space-2) var(--space-3);
+  }
+  
+  .modern-input--small {
+    padding: var(--space-1) var(--space-2);
+  }
+}
+
+/* Mejoras para accesibilidad */
+@media (prefers-reduced-motion: reduce) {
+  .modern-input-container {
+    animation: none;
+  }
+  
+  .modern-input {
+    transition: none;
+  }
+  
+  .modern-input:focus {
+    transform: none;
+  }
+  
+  .modern-input:hover:not(.modern-input--disabled) {
+    transform: none;
+  }
+  
+  .modern-input__icon {
+    transition: none;
+  }
+}
+
+/* Mejoras para contraste alto */
+@media (prefers-contrast: high) {
+  .modern-input {
+    border-width: 3px;
+  }
+  
+  .modern-input:focus {
+    border-width: 4px;
+  }
+}
+
+/* Mejoras para modo oscuro específico */
+.dark-mode .modern-input {
+  background-color: var(--bg-elevated);
+  border-color: var(--border-medium);
+}
+
+.dark-mode .modern-input--filled {
+  background-color: var(--bg-tertiary);
+}
+
+.dark-mode .modern-input--disabled {
+  background-color: var(--bg-tertiary);
+  border-color: var(--border-dark);
+}
+
+/* Estados de autocompletado */
+.modern-input:-webkit-autofill,
+.modern-input:-webkit-autofill:hover,
+.modern-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 30px var(--bg-elevated) inset !important;
+  -webkit-text-fill-color: var(--text-primary) !important;
+  border-color: var(--primary-color) !important;
+}
+
+.dark-mode .modern-input:-webkit-autofill,
+.dark-mode .modern-input:-webkit-autofill:hover,
+.dark-mode .modern-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 30px var(--bg-elevated) inset !important;
+}
+
+/* Grupos de inputs */
+.modern-input-group {
+  display: flex;
+  gap: 0;
+}
+
+.modern-input-group .modern-input {
+  border-radius: 0;
+  margin: 0;
+}
+
+.modern-input-group .modern-input:first-child {
+  border-top-left-radius: var(--radius-lg);
+  border-bottom-left-radius: var(--radius-lg);
+}
+
+.modern-input-group .modern-input:last-child {
+  border-top-right-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
+}
+
+.modern-input-group .modern-input:not(:last-child) {
+  border-right: none;
+}
+
+/* Inputs con botones */
+.modern-input-with-button {
+  display: flex;
+  gap: 0;
+}
+
+.modern-input-with-button .modern-input {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+}
+
+.modern-input-with-button .modern-button {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: none;
+}
+
+/* Inputs de búsqueda */
+.modern-input--search {
+  padding-left: var(--space-10);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: var(--space-3) center;
+  background-size: 1.25em;
+}
+
+.modern-input--search:focus {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%233b82f6'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'%3E%3C/path%3E%3C/svg%3E");
+}
+
+/* Inputs de contraseña */
+.modern-input--password {
+  padding-right: var(--space-10);
+}
+
+.modern-input__password-toggle {
+  position: absolute;
+  right: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-normal);
+}
+
+.modern-input__password-toggle:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
+}
+
+/* Inputs de número */
+.modern-input[type="number"]::-webkit-inner-spin-button,
+.modern-input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.modern-input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Inputs de fecha */
+.modern-input[type="date"]::-webkit-calendar-picker-indicator {
+  background: transparent;
+  bottom: 0;
+  color: transparent;
+  cursor: pointer;
+  height: auto;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: auto;
+}
+
+.modern-input[type="date"]::-webkit-datetime-edit {
+  color: var(--text-primary);
+}
+
+.modern-input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+}
+
+.modern-input[type="date"]::-webkit-datetime-edit-text {
+  color: var(--text-secondary);
+  padding: 0 var(--space-1);
+}
+
+.modern-input[type="date"]::-webkit-datetime-edit-month-field,
+.modern-input[type="date"]::-webkit-datetime-edit-day-field,
+.modern-input[type="date"]::-webkit-datetime-edit-year-field {
+  color: var(--text-primary);
+  padding: 0 var(--space-1);
+} 

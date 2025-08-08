@@ -26,11 +26,12 @@ __pycache__/
 /backend/temp_books/
 /backend/books/
 /backend/static/covers/
+/backend/temp*
 
 # Archivos del sistema operativo
 .DS_Store
 Thumbs.db
 
-backend/credentials.json
-backend/temp_folder_upload/
-backend/token.json
+# Archivos de Google OAuth (información sensible)
+/backend/credentials.json
+/backend/token.json

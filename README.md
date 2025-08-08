@@ -43,7 +43,7 @@ Mi Biblioteca Inteligente es una aplicación web avanzada que utiliza la IA mult
 - **Panel de Herramientas:** Acceso centralizado a todas las utilidades
 - **Conversor de Formatos:** Convierte EPUB a PDF sin software externo
 - **Limpieza de Archivos:** Elimina archivos temporales y portadas huérfanas
-- **Estado de Google Drive:** Monitoreo en tiempo real el estado de la nube
+- **Estado de Google Drive:** Monitoreo en tiempo real del estado de la nube
 - **Health Checks:** Verificación automática de la salud del sistema
 
 ### 🎨 **Interfaz Moderna**
@@ -175,7 +175,7 @@ Este script:
 - Inicia el servidor backend en http://localhost:8001
 - Inicia el servidor frontend en http://localhost:3000
 
-¡Abre tu navegador en `http://localhost:3000` y empieza a construir tu librería inteligente!
+¡Abre tu navegador en `http://localhost:3000` y empieza a construir tu biblioteca inteligente!
 
 ## 🔧 Gestión del Entorno Virtual
 

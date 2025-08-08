@@ -1,90 +1,180 @@
 .App {
   text-align: center;
+  min-height: 100vh;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color var(--transition-normal), color var(--transition-normal);
 }
 
 .App-header {
-  background-color: #282c34;
-  padding: 20px;
-  color: white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  background-color: var(--bg-elevated);
+  padding: var(--space-6) var(--space-8);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-md);
+  border-bottom: 1px solid var(--border-light);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  backdrop-filter: blur(10px);
+}
+
+.dark-mode .App-header {
+  background-color: var(--bg-elevated);
+  backdrop-filter: blur(10px);
 }
 
 .App-header h1 {
   margin: 0;
+  font-size: var(--space-8);
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .App-nav {
-  margin-top: 15px;
+  margin-top: var(--space-6);
   display: flex;
   justify-content: center;
-  gap: 10px;
+  gap: var(--space-4);
+  flex-wrap: wrap;
 }
 
 .App-nav button {
   background-color: transparent;
-  border: 2px solid #61dafb;
-  color: #61dafb;
-  padding: 10px 20px;
-  border-radius: 5px;
+  border: 2px solid var(--primary-color);
+  color: var(--primary-color);
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-lg);
   cursor: pointer;
   font-size: 1rem;
-  font-weight: bold;
-  transition: background-color 0.2s, color 0.2s;
+  font-weight: 600;
+  transition: all var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+.App-nav button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left var(--transition-slow);
+}
+
+.App-nav button:hover::before {
+  left: 100%;
 }
 
 .App-nav button:hover {
-  background-color: #61dafb;
-  color: #282c34;
+  background-color: var(--primary-color);
+  color: var(--text-inverse);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
 .App-nav button.active {
-  background-color: #61dafb;
-  color: #282c34;
+  background-color: var(--primary-color);
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-md);
 }
 
 .App-content {
-  background-color: #3a3f4a;
-  min-height: calc(100vh - 120px); /* Ajustar altura */
+  background-color: var(--bg-secondary);
+  min-height: calc(100vh - 120px);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20px;
-  color: white;
+  padding: var(--space-8);
+  color: var(--text-primary);
+  position: relative;
 }
 
 .upload-view-container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: var(--space-8);
+  width: 100%;
+  max-width: 1200px;
 }
 
 .upload-container {
-  margin-top: 20px;
+  margin-top: var(--space-8);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: var(--space-8);
   width: 100%;
 }
 
 .drop-zone {
-  border: 2px dashed #61dafb;
-  border-radius: 10px;
-  width: 50vw;
+  border: 3px dashed var(--primary-color);
+  border-radius: var(--radius-xl);
+  width: 100%;
   max-width: 600px;
-  padding: 40px 20px;
+  padding: var(--space-16) var(--space-8);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  background-color: #282c34;
+  background-color: var(--bg-elevated);
+  transition: all var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+.drop-zone::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, 
+    rgba(59, 130, 246, 0.05), 
+    rgba(16, 185, 129, 0.05)
+  );
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+
+.drop-zone:hover::before {
+  opacity: 1;
+}
+
+.drop-zone:hover {
+  border-color: var(--secondary-color);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-xl);
+}
+
+.drop-zone.dragover {
+  border-color: var(--secondary-color);
+  background-color: rgba(16, 185, 129, 0.1);
+  transform: scale(1.02);
 }
 
 .drop-zone p {
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  position: relative;
+  z-index: 1;
+}
+
+.drop-zone .upload-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-4);
+  color: var(--primary-color);
+  position: relative;
+  z-index: 1;
 }
 
 #file-input {
@@ -92,40 +182,255 @@
 }
 
 .file-label {
-  background-color: #61dafb;
-  color: #282c34;
-  padding: 10px 20px;
-  border-radius: 5px;
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  color: var(--text-inverse);
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  font-weight: bold;
-  margin-top: 15px;
-  transition: background-color 0.2s;
+  font-weight: 600;
+  margin-top: var(--space-6);
+  transition: all var(--transition-normal);
+  position: relative;
+  z-index: 1;
+  box-shadow: var(--shadow-md);
 }
 
 .file-label:hover {
-  background-color: #52b8d8;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  background: linear-gradient(135deg, var(--primary-hover), var(--primary-dark));
 }
 
 .upload-button {
-  background-color: #4CAF50;
-  color: white;
-  padding: 15px 32px;
+  background: linear-gradient(135deg, var(--secondary-color), var(--secondary-hover));
+  color: var(--text-inverse);
+  padding: var(--space-4) var(--space-10);
   text-align: center;
-  font-size: 16px;
-  font-weight: bold;
+  font-size: 1.1rem;
+  font-weight: 600;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all var(--transition-normal);
+  box-shadow: var(--shadow-md);
+  position: relative;
+  overflow: hidden;
+}
+
+.upload-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left var(--transition-slow);
+}
+
+.upload-button:hover::before {
+  left: 100%;
 }
 
 .upload-button:hover {
-  background-color: #45a049;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  background: linear-gradient(135deg, var(--secondary-hover), var(--secondary-color));
+}
+
+.upload-button:disabled {
+  background: var(--border-medium);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: var(--shadow-sm);
+}
+
+.upload-button:disabled::before {
+  display: none;
 }
 
 .message {
-  margin-top: 20px;
-  font-size: 1rem;
-  color: #61dafb;
-  font-weight: bold;
+  margin-top: var(--space-8);
+  font-size: 1.1rem;
+  font-weight: 600;
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-normal);
+}
+
+.message.success {
+  color: var(--success-color);
+  background-color: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.message.error {
+  color: var(--error-color);
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.message.info {
+  color: var(--info-color);
+  background-color: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.message.warning {
+  color: var(--warning-color);
+  background-color: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.fade-in {
+  animation: fadeIn var(--transition-slow) ease-out;
+}
+
+.slide-in {
+  animation: slideIn var(--transition-slow) ease-out;
+}
+
+.pulse {
+  animation: pulse 2s infinite;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .App-header {
+    padding: var(--space-4) var(--space-6);
+  }
+  
+  .App-header h1 {
+    font-size: var(--space-6);
+  }
+  
+  .App-nav {
+    gap: var(--space-3);
+  }
+  
+  .App-nav button {
+    padding: var(--space-2) var(--space-4);
+    font-size: 0.9rem;
+  }
+  
+  .App-content {
+    padding: var(--space-6);
+  }
+  
+  .drop-zone {
+    padding: var(--space-12) var(--space-6);
+  }
+  
+  .drop-zone .upload-icon {
+    font-size: 2.5rem;
+  }
+  
+  .file-label {
+    padding: var(--space-3) var(--space-6);
+    font-size: 0.9rem;
+  }
+  
+  .upload-button {
+    padding: var(--space-3) var(--space-8);
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .App-header {
+    padding: var(--space-3) var(--space-4);
+  }
+  
+  .App-header h1 {
+    font-size: var(--space-5);
+  }
+  
+  .App-nav {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  
+  .App-nav button {
+    width: 100%;
+    max-width: 200px;
+  }
+  
+  .App-content {
+    padding: var(--space-4);
+  }
+  
+  .drop-zone {
+    padding: var(--space-8) var(--space-4);
+  }
+  
+  .drop-zone .upload-icon {
+    font-size: 2rem;
+  }
+  
+  .drop-zone p {
+    font-size: 1rem;
+    text-align: center;
+  }
+}
+
+/* Mejoras para accesibilidad */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .App-nav button::before,
+  .upload-button::before {
+    display: none;
+  }
+}
+
+/* Mejoras para contraste alto */
+@media (prefers-contrast: high) {
+  .App-nav button {
+    border-width: 3px;
+  }
+  
+  .drop-zone {
+    border-width: 4px;
+  }
+  
+  .file-label,
+  .upload-button {
+    border: 2px solid var(--text-primary);
+  }
 }

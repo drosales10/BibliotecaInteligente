@@ -1,0 +1,258 @@
+.dark-mode-toggle {
+  position: relative;
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+  border: 2px solid var(--border-light);
+  border-radius: var(--radius-xl);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
+  /* Debug styles */
+  z-index: 10000 !important;
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.dark-mode-toggle:hover {
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+  color: var(--text-primary);
+}
+
+.dark-mode-toggle:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.dark-mode-toggle:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Tamaños */
+.dark-mode-toggle--small {
+  width: 2.5rem;
+  height: 1.5rem;
+  min-width: 2.5rem;
+}
+
+.dark-mode-toggle--medium {
+  width: 3rem;
+  height: 1.75rem;
+  min-width: 3rem;
+}
+
+.dark-mode-toggle--large {
+  width: 3.5rem;
+  height: 2rem;
+  min-width: 3.5rem;
+}
+
+/* Contenedor interno */
+.dark-mode-toggle__container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.125rem;
+}
+
+/* Iconos */
+.dark-mode-toggle__icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  transition: all var(--transition-normal);
+  z-index: 2;
+  position: relative;
+}
+
+.dark-mode-toggle--small .dark-mode-toggle__icon {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.dark-mode-toggle--large .dark-mode-toggle__icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Icono del sol */
+.dark-mode-toggle__icon--sun {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+  color: var(--accent-color);
+}
+
+.dark-mode-toggle[data-dark="true"] .dark-mode-toggle__icon--sun {
+  opacity: 0.3;
+  transform: scale(0.8) rotate(-90deg);
+  color: var(--text-tertiary);
+}
+
+/* Icono de la luna */
+.dark-mode-toggle__icon--moon {
+  opacity: 0.3;
+  transform: scale(0.8) rotate(90deg);
+  color: var(--text-tertiary);
+}
+
+.dark-mode-toggle[data-dark="true"] .dark-mode-toggle__icon--moon {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+  color: var(--primary-color);
+}
+
+/* Indicador de toggle */
+.dark-mode-toggle__indicator {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: calc(50% - 0.125rem);
+  height: calc(100% - 0.25rem);
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-normal);
+  box-shadow: var(--shadow-sm);
+  z-index: 1;
+}
+
+.dark-mode-toggle[data-dark="true"] .dark-mode-toggle__indicator {
+  left: calc(50% + 0.125rem);
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+}
+
+/* Estados de hover para el indicador */
+.dark-mode-toggle:hover .dark-mode-toggle__indicator {
+  box-shadow: var(--shadow-md);
+}
+
+.dark-mode-toggle[data-dark="true"]:hover .dark-mode-toggle__indicator {
+  background: linear-gradient(135deg, var(--primary-hover), var(--primary-color));
+}
+
+/* Animaciones */
+@keyframes toggleIn {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes toggleOut {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+}
+
+.dark-mode-toggle__icon {
+  animation: toggleIn var(--transition-normal) ease-out;
+}
+
+.dark-mode-toggle__indicator {
+  animation: toggleIn var(--transition-normal) ease-out;
+}
+
+/* Estados de carga */
+.dark-mode-toggle--loading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.dark-mode-toggle--loading .dark-mode-toggle__indicator {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Estados deshabilitados */
+.dark-mode-toggle:disabled,
+.dark-mode-toggle--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.dark-mode-toggle:disabled:hover,
+.dark-mode-toggle--disabled:hover {
+  transform: none;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .dark-mode-toggle--large {
+    width: 3rem;
+    height: 1.75rem;
+    min-width: 3rem;
+  }
+  
+  .dark-mode-toggle--large .dark-mode-toggle__icon {
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .dark-mode-toggle--medium,
+  .dark-mode-toggle--large {
+    width: 2.5rem;
+    height: 1.5rem;
+    min-width: 2.5rem;
+  }
+  
+  .dark-mode-toggle--medium .dark-mode-toggle__icon,
+  .dark-mode-toggle--large .dark-mode-toggle__icon {
+    width: 0.75rem;
+    height: 0.75rem;
+  }
+}
+
+/* Modo oscuro específico */
+.dark-mode .dark-mode-toggle {
+  background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary));
+  border-color: var(--border-medium);
+}
+
+.dark-mode .dark-mode-toggle:hover {
+  border-color: var(--primary-light);
+  background: linear-gradient(135deg, var(--bg-elevated), var(--bg-tertiary));
+}
+
+.dark-mode .dark-mode-toggle__indicator {
+  background: linear-gradient(135deg, var(--primary-light), var(--primary-color));
+  box-shadow: 0 0 0.5rem rgba(59, 130, 246, 0.3);
+}
+
+.dark-mode .dark-mode-toggle__indicator[data-active="true"] {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+  box-shadow: 0 0 0.5rem rgba(59, 130, 246, 0.4);
+}
+
+.dark-mode .dark-mode-toggle:hover .dark-mode-toggle__indicator[data-active="true"] {
+  background: linear-gradient(135deg, var(--primary-light), var(--primary-color));
+  box-shadow: 0 0 0.75rem rgba(59, 130, 246, 0.5);
+} 

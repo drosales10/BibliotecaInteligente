@@ -1,41 +1,117 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, Link, useLocation } from 'react-router-dom';
-import { useBooks } from './hooks/useBooks';
+import { useBookService } from './hooks/useBookService';
+import { useAppMode } from './contexts/AppModeContext';
+import { usePagination } from './hooks/usePagination';
+import useLoadingState from './hooks/useLoadingState';
+import useAdvancedSearch from './hooks/useAdvancedSearch';
+import SyncToDriveButton from './components/SyncToDriveButton';
+import BulkSyncToDriveButton from './components/BulkSyncToDriveButton';
+import PaginationControls from './components/PaginationControls';
+import LazyImage from './components/LazyImage';
+import BookCardSkeleton, { BookCardSkeletonGrid } from './components/BookCardSkeleton';
+import LoadingSpinner, { LoadingOverlay, LoadingInline } from './components/LoadingSpinner';
+import ProgressIndicator, { IndeterminateProgress } from './components/ProgressIndicator';
+import AdvancedSearchBar from './components/AdvancedSearchBar';
+import SearchFilters from './components/SearchFilters';
+import FilterChips from './components/FilterChips';
+import BookEditModal from './components/BookEditModal';
+import CleanupCoversButton from './components/CleanupCoversButton';
+import CleanupTempFilesButton from './components/CleanupTempFilesButton';
 import './LibraryView.css';
 
-// Hook personalizado para debounce
-const useDebounce = (value, delay) => {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-  return debouncedValue;
+
+
+// Función para obtener la URL correcta de la imagen
+const getImageUrl = (imageSrc) => {
+  if (!imageSrc) {
+    return '';
+  }
+  
+  // Si es una URL completa (Google Drive), usar el endpoint del backend
+  if (imageSrc.startsWith('http') && imageSrc.includes('drive.google.com')) {
+    // Extraer el file_id de la URL de Google Drive
+    // Formato: https://drive.google.com/file/d/{file_id}/view?usp=drivesdk
+    if (imageSrc.includes('/file/d/')) {
+      const fileId = imageSrc.split('/file/d/')[1].split('/')[0];
+      const backendUrl = `http://localhost:8001/api/drive/cover/${fileId}`;
+      return backendUrl;
+    }
+    
+    return imageSrc;
+  }
+  
+  // Si es una ruta local, construir la URL completa
+  if (imageSrc.startsWith('/')) {
+    return `http://localhost:8001${imageSrc}`;
+  }
+  
+  // Si es solo el nombre del archivo, construir la URL correcta
+  // Las imágenes se guardan en static/covers/, pero se sirven desde /static/
+  return `http://localhost:8001/static/covers/${imageSrc}`;
 };
 
-// Componente para la portada (con fallback a genérica)
+// Componente para la portada con lazy loading
 const BookCover = ({ src, alt, title }) => {
-  const [hasError, setHasError] = useState(false);
-  useEffect(() => { setHasError(false); }, [src]);
-  const handleError = () => { setHasError(true); };
+  const imageUrl = getImageUrl(src);
+  const initial = title ? title[0].toUpperCase() : '?';
+  
+  // Fallback personalizado para libros
+  const fallbackElement = (
+    <div className="generic-cover">
+      <span className="generic-cover-initial">{initial}</span>
+    </div>
+  );
 
-  if (hasError || !src) {
-    const initial = title ? title[0].toUpperCase() : '?';
-    return (
-      <div className="generic-cover">
-        <span className="generic-cover-initial">{initial}</span>
-      </div>
-    );
-  }
-  return <img src={src} alt={alt} className="book-cover" onError={handleError} />;
+  return (
+    <LazyImage
+      src={imageUrl}
+      alt={alt}
+      title={title}
+      className="book-cover-lazy"
+      variant="book-cover"
+      showSkeleton={true}
+      skeletonProps={{
+        variant: 'book-cover',
+        width: '100%',
+        height: '280px'
+      }}
+      fallback={fallbackElement}
+      threshold={0.1}
+      rootMargin="100px"
+    />
+  );
+};
+
+// Componente para el indicador de ubicación
+const LocationIndicator = ({ book }) => {
+  const getLocationInfo = () => {
+    // Lógica mejorada para determinar la ubicación
+    if (book.source === 'drive' || book.drive_file_id) {
+      // Si el source es drive o tiene drive_file_id, está en la nube
+      return { icon: '☁️', text: 'Cloud', class: 'location-cloud' };
+    } else if (book.synced_to_drive === true) {
+      // Si está sincronizado, está en la nube
+      return { icon: '☁️', text: 'Cloud', class: 'location-cloud' };
+    } else {
+      // Por defecto, está local
+      return { icon: '💾', text: 'Local', class: 'location-local' };
+    }
+  };
+
+  const locationInfo = getLocationInfo();
+
+  return (
+    <div className={`location-indicator ${locationInfo.class}`}>
+      <span className="location-icon">{locationInfo.icon}</span>
+      <span className="location-text">{locationInfo.text}</span>
+    </div>
+  );
 };
 
 // Modal de confirmación
 const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, bookTitle, isDeleting, isMultiple = false, selectedCount = 0 }) => {
+  console.log('🔍 DeleteConfirmationModal renderizado con props:', { isOpen, bookTitle, isMultiple, selectedCount });
   if (!isOpen) return null;
 
   // Validar que selectedCount sea un número válido
@@ -75,8 +151,6 @@ const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, bookTitle, isDele
 
 function LibraryView() {
   const [searchParams] = useSearchParams();
-  const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const [deleteModal, setDeleteModal] = useState({ 
     isOpen: false, 
     bookId: null, 
@@ -84,28 +158,193 @@ function LibraryView() {
     isMultiple: false, 
     selectedIds: [] 
   });
+  
+  // Log del estado del modal para depuración
+  console.log('🔍 Estado actual del deleteModal:', deleteModal);
   const [deletingBookId, setDeletingBookId] = useState(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedBooks, setSelectedBooks] = useState(new Set());
+  const [books, setBooks] = useState([]);
+  const [error, setError] = useState(null);
+  const [editModal, setEditModal] = useState({ 
+    isOpen: false, 
+    book: null 
+  });
+  const [categories, setCategories] = useState([]);
   const location = useLocation();
 
-  // Usar el hook personalizado para manejar los libros
-  const { books, error, loading, fetchBooks, removeBook, updateBook } = useBooks(searchParams, debouncedSearchTerm);
+  // Usar los nuevos hooks
+  const { getBooks, deleteBook, appMode, getCategories } = useBookService();
+  const { isLocalMode, isDriveMode } = useAppMode();
+  
+  // Hook de búsqueda avanzada
+  const {
+    searchTerm,
+    filters,
+    suggestions,
+    searchHistory,
+    isAdvancedMode,
+    isLoading: searchLoading,
+    performSearch,
+    updateSearchTerm,
+    updateFilters,
+    clearSearch,
+    toggleAdvancedMode,
+    removeFilter,
+    clearAllFilters,
+    getActiveFilters
+  } = useAdvancedSearch();
+  
+  // Hook de paginación
+  const {
+    currentPage,
+    perPage,
+    totalItems,
+    totalPages,
+    paginationInfo,
+    goToPage,
+    changePerPage,
+    updatePaginationInfo,
+    resetPagination
+  } = usePagination(1, 20);
 
-  // Efecto para cargar libros al montar el componente
-  useEffect(() => {
+  // Hook de estados de carga mejorados
+  const {
+    loadingStates,
+    isLoading,
+    startLoading,
+    stopLoading,
+    withLoading
+  } = useLoadingState({
+    initial: true,
+    search: false,
+    pagination: false,
+    delete: false,
+    bulkDelete: false,
+    sync: false
+  });
+
+  // Función para cargar libros
+  const fetchBooks = useCallback(async () => {
+    try {
+      setError(null);
+      
+      const category = searchParams.get('category');
+      // Por ahora, usar solo búsqueda simple
+      const searchQuery = searchTerm;
+      
+      const booksData = await getBooks(category, searchQuery, currentPage, perPage);
+      
+      // Verificar si la respuesta tiene estructura de paginación
+      if (booksData && booksData.items && booksData.pagination) {
+        // Nueva estructura con paginación
+        const { items: booksList, pagination } = booksData;
+        
+        // Filtrar libros según el modo actual
+        let filteredBooks = booksList;
+        
+        if (isLocalMode) {
+          // En modo local, mostrar solo libros locales (source: 'local' o que no estén en Drive)
+          filteredBooks = booksList.filter(book => 
+            book.source === 'local' || 
+            (!book.synced_to_drive && !book.drive_file_id)
+          );
+        } else if (isDriveMode) {
+          // En modo nube, mostrar solo libros de Drive (source: 'drive' o synced_to_drive: true)
+          filteredBooks = booksList.filter(book => 
+            book.source === 'drive' || 
+            book.synced_to_drive === true ||
+            book.drive_file_id
+          );
+        }
+        
+        // Agregar información de ubicación a los libros
+        const booksWithLocation = filteredBooks.map(book => ({
+          ...book,
+          // Asegurar que tenga valores por defecto correctos
+          source: book.source || (book.drive_file_id ? 'drive' : 'local'),
+          synced_to_drive: book.synced_to_drive || false
+        }));
+        
+        setBooks(booksWithLocation);
+        updatePaginationInfo(pagination);
+      } else {
+        // Estructura antigua (sin paginación) - mantener compatibilidad
+        let filteredBooks = booksData;
+        
+        if (isLocalMode) {
+          filteredBooks = booksData.filter(book => 
+            book.source === 'local' || 
+            (!book.synced_to_drive && !book.drive_file_id)
+          );
+        } else if (isDriveMode) {
+          filteredBooks = booksData.filter(book => 
+            book.source === 'drive' || 
+            book.synced_to_drive === true ||
+            book.drive_file_id
+          );
+        }
+        
+        const booksWithLocation = filteredBooks.map(book => ({
+          ...book,
+          source: book.source || (book.drive_file_id ? 'drive' : 'local'),
+          synced_to_drive: book.synced_to_drive || false
+        }));
+        
+        setBooks(booksWithLocation);
+        // Resetear paginación para estructura antigua
+        resetPagination();
+      }
+    } catch (err) {
+      console.error('❌ Error en fetchBooks:', err);
+      setError(err.message);
+      console.error('Error al cargar libros:', err);
+    }
+  }, [getBooks, searchParams, searchTerm, filters, isAdvancedMode, isLocalMode, isDriveMode, appMode, currentPage, perPage, updatePaginationInfo, resetPagination]);
+
+  // Función para actualizar libros manualmente
+  const refreshBooks = useCallback(() => {
     fetchBooks();
   }, [fetchBooks]);
 
+  // Efecto para cargar libros al montar el componente
+  useEffect(() => {
+    withLoading('initial', fetchBooks);
+  }, [fetchBooks, withLoading]);
+
+  // Efecto para recargar libros cuando cambia el modo de aplicación
+  useEffect(() => {
+    withLoading('initial', fetchBooks);
+  }, [appMode, isLocalMode, isDriveMode, withLoading]);
+
   // Efecto para actualizar libros cuando cambia la ubicación (después de añadir un libro)
   useEffect(() => {
-    // Si venimos de la página de upload, actualizar la lista
-    if (location.pathname === '/') {
-      fetchBooks();
+    if (location.state?.refreshBooks) {
+      withLoading('initial', fetchBooks);
+      // Limpiar el estado para evitar recargas innecesarias
+      window.history.replaceState({}, document.title);
     }
-  }, [location.pathname, fetchBooks]);
+  }, [location.state, fetchBooks, withLoading]);
+
+  // Efecto para resetear paginación cuando cambia la búsqueda o categoría
+  useEffect(() => {
+    resetPagination();
+  }, [searchTerm, filters, searchParams, resetPagination]);
+
+  // Efecto para recargar libros cuando cambia la paginación
+  useEffect(() => {
+    withLoading('pagination', fetchBooks);
+  }, [currentPage, perPage, withLoading]);
+
+  // Efecto para búsqueda avanzada
+  useEffect(() => {
+    if (isAdvancedMode && (searchTerm || Object.keys(filters).length > 0)) {
+      withLoading('search', fetchBooks);
+    }
+  }, [searchTerm, filters, isAdvancedMode, withLoading, fetchBooks]);
 
   const handleDeleteClick = (bookId, bookTitle) => {
+    console.log('🔍 handleDeleteClick llamado con:', { bookId, bookTitle });
     setDeleteModal({ 
       isOpen: true, 
       bookId, 
@@ -113,41 +352,43 @@ function LibraryView() {
       isMultiple: false, 
       selectedIds: [] 
     });
+    console.log('🔍 Modal configurado para abrirse');
   };
 
   const handleDeleteConfirm = async () => {
+    console.log('🔍 handleDeleteConfirm llamado con deleteModal:', deleteModal);
     const { bookId, isMultiple, selectedIds } = deleteModal;
     
     if (isMultiple) {
+      console.log('🔍 Ejecutando eliminación masiva');
       await handleBulkDelete(selectedIds);
     } else {
+      console.log('🔍 Ejecutando eliminación individual para bookId:', bookId);
       await handleSingleDelete(bookId);
     }
   };
 
   const handleSingleDelete = async (bookId) => {
+    console.log('🔍 handleSingleDelete iniciado para bookId:', bookId);
     setDeletingBookId(bookId);
     
     try {
-      const response = await fetch(`http://localhost:8001/books/${bookId}`, { 
-        method: 'DELETE' 
-      });
+      console.log('🔍 Llamando a deleteBook...');
+      const response = await deleteBook(bookId);
+      console.log('🔍 Respuesta de deleteBook:', response);
       
       if (response.ok) {
-        // Animación de eliminación
-        updateBook(bookId, { deleting: true });
-        
-        // Esperar un momento para la animación
-        setTimeout(() => {
-          removeBook(bookId);
-        }, 300);
-        
+        console.log('🔍 Eliminación exitosa, recargando libros...');
+        // Recargar la lista de libros para actualizar la UI
+        await withLoading('initial', fetchBooks);
         resetModal();
       } else {
+        console.log('🔍 Error en respuesta:', response.status, response.statusText);
         const errorData = await response.json();
         alert(`Error al eliminar el libro: ${errorData.detail || 'Error desconocido'}`);
       }
     } catch (err) {
+      console.error('🔍 Error en handleSingleDelete:', err);
       alert('Error de conexión al intentar eliminar el libro.');
     } finally {
       setDeletingBookId(null);
@@ -156,39 +397,70 @@ function LibraryView() {
 
   const handleBulkDelete = async (bookIds) => {
     try {
-      const response = await fetch(`http://localhost:8001/books/bulk`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ book_ids: bookIds })
-      });
+      console.log('🔍 handleBulkDelete iniciado para IDs:', bookIds);
       
-      if (response.ok) {
-        const result = await response.json();
-        
-        // Animación de eliminación para todos los libros seleccionados
-        bookIds.forEach(bookId => {
-          updateBook(bookId, { deleting: true });
+      if (isDriveMode) {
+        // En modo nube, usar el endpoint de eliminación masiva de Drive
+        console.log('🔍 Usando eliminación masiva de Drive');
+        const response = await fetch('http://localhost:8001/api/drive/books/bulk', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ book_ids: bookIds }),
         });
         
-        // Esperar un momento para la animación
-        setTimeout(() => {
-          bookIds.forEach(bookId => {
-            removeBook(bookId);
-          });
-        }, 300);
-        
-        resetModal();
-        setSelectionMode(false);
-        setSelectedBooks(new Set());
-        
-        alert(`Se eliminaron ${result.deleted_count} libro${result.deleted_count > 1 ? 's' : ''} exitosamente.`);
+        if (response.ok) {
+          const result = await response.json();
+          console.log('🔍 Resultado de eliminación masiva:', result);
+          
+          if (result.deleted_count > 0) {
+            alert(`Se eliminaron ${result.deleted_count} libro${result.deleted_count > 1 ? 's' : ''} exitosamente.`);
+          }
+          if (result.failed_count > 0) {
+            const errorMessages = result.failed_deletions.join('\n');
+            alert(`Error al eliminar algunos libros:\n${errorMessages}`);
+          }
+        } else {
+          const errorData = await response.json();
+          alert(`Error al eliminar libros: ${errorData.detail || 'Error desconocido'}`);
+        }
       } else {
-        const errorData = await response.json();
-        alert(`Error al eliminar los libros: ${errorData.detail || 'Error desconocido'}`);
+        // En modo local, usar eliminación individual
+        console.log('🔍 Usando eliminación individual para modo local');
+        const deletePromises = bookIds.map(async (bookId) => {
+          try {
+            const response = await deleteBook(bookId);
+            return { bookId, response, success: true };
+          } catch (error) {
+            return { bookId, error: error.message, success: false };
+          }
+        });
+        
+        const results = await Promise.all(deletePromises);
+        
+        const successfulDeletes = results.filter(result => result.success);
+        const failedDeletes = results.filter(result => !result.success);
+
+        if (successfulDeletes.length > 0) {
+          alert(`Se eliminaron ${successfulDeletes.length} libro${successfulDeletes.length > 1 ? 's' : ''} exitosamente.`);
+        }
+        if (failedDeletes.length > 0) {
+          const errorMessages = failedDeletes.map(result => 
+            `Error al eliminar el libro ${result.bookId}: ${result.error}`
+          );
+          alert(`Error al eliminar algunos libros:\n${errorMessages.join('\n')}`);
+        }
       }
+
+      // Re-fetch books to update the UI
+      await withLoading('initial', fetchBooks);
+      resetModal();
+      setSelectionMode(false);
+      setSelectedBooks(new Set());
+      
     } catch (err) {
+      console.error('🔍 Error en handleBulkDelete:', err);
       alert('Error de conexión al intentar eliminar los libros.');
     }
   };
@@ -254,11 +526,177 @@ function LibraryView() {
   const safeBooks = Array.isArray(books) ? books : [];
   const booksLength = safeBooks.length;
 
+  // Función para manejar la sincronización completada
+  const handleSyncComplete = useCallback((bookId, result) => {
+    // Actualizar el libro en el estado local
+    setBooks(prevBooks => 
+      prevBooks.map(book => 
+        book.id === bookId 
+          ? { 
+              ...book, 
+              synced_to_drive: true, 
+              source: 'drive',  // Cambiar a 'drive' ya que ahora está solo en la nube
+              file_path: null,  // Limpiar la ruta local
+              drive_file_id: result.drive_file_id,
+              drive_file_path: result.drive_file_path
+            }
+          : book
+      )
+    );
+  }, []);
+
+  // Función para manejar la visualización de PDF
+  const handleViewPDF = async (book) => {
+    try {
+      // Verificar si el libro está en modo local o nube
+      if (book.source === 'local' || (!book.synced_to_drive && !book.drive_file_id)) {
+        // Libro local - abrir en nueva pestaña
+        const url = `http://localhost:8001/api/books/download/${book.id}`;
+        window.open(url, '_blank');
+        return;
+      } else if (book.source === 'drive' || book.synced_to_drive || book.drive_file_id) {
+        // Libro en Google Drive - abrir en nueva pestaña
+        const url = `http://localhost:8001/api/drive/books/${book.id}/content`;
+        window.open(url, '_blank');
+        return;
+      }
+      
+      // Si no está en ninguno de los dos, mostrar mensaje
+      alert('El archivo no está disponible localmente ni en Google Drive');
+      
+    } catch (error) {
+      console.error('Error al abrir PDF:', error);
+      alert('Error al abrir el archivo PDF');
+    }
+  };
+
+  const handleEditBook = (book) => {
+    setEditModal({ isOpen: true, book });
+  };
+
+  const handleCloseEditModal = () => {
+    setEditModal({ isOpen: false, book: null });
+  };
+
+  const handleBookUpdate = (updatedBook) => {
+    setBooks(prevBooks => 
+      prevBooks.map(book => 
+        book.id === updatedBook.id ? updatedBook : book
+      )
+    );
+  };
+
+  const handleCategoryCreate = (newCategory) => {
+    setCategories(prev => [...prev, newCategory]);
+  };
+
+  const handleSearchCoverOnline = async (book) => {
+    try {
+      console.log('Buscando portada online para:', book.title);
+      
+      const response = await fetch(`http://localhost:8001/api/books/${book.id}/search-cover-online`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        console.log('Portada encontrada:', data.cover_url);
+        // Actualizar la lista de libros para reflejar el cambio
+        refreshBooks();
+        alert(`✅ Portada encontrada y actualizada: ${data.cover_url}`);
+      } else {
+        console.error('Error al buscar portada:', data.message);
+        alert(`❌ No se pudo encontrar portada online: ${data.message}`);
+      }
+    } catch (error) {
+      console.error('Error al buscar portada online:', error);
+      alert('❌ Error al buscar portada online. Verifica la conexión.');
+    }
+  };
+
+  const handleBulkSearchCovers = async () => {
+    try {
+      console.log('Iniciando búsqueda masiva de portadas para', safeBooks.length, 'libros');
+      
+      // Obtener IDs de libros que no tienen portada o tienen portadas genéricas
+      const booksWithoutCovers = safeBooks.filter(book => 
+        !book.cover_image_url || 
+        book.cover_image_url.includes('generic') ||
+        book.cover_image_url.includes('placeholder')
+      );
+      
+      if (booksWithoutCovers.length === 0) {
+        alert('✅ Todos los libros ya tienen portadas. No es necesario buscar nuevas portadas.');
+        return;
+      }
+      
+      const bookIds = booksWithoutCovers.map(book => book.id);
+      
+      const response = await fetch(`http://localhost:8001/api/books/bulk-search-covers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bookIds),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        console.log('Búsqueda masiva completada:', data);
+        // Actualizar la lista de libros para reflejar los cambios
+        refreshBooks();
+        alert(`✅ Búsqueda masiva completada:\n${data.successful} portadas encontradas\n${data.failed} no encontradas`);
+      } else {
+        console.error('Error en búsqueda masiva:', data.message);
+        alert(`❌ Error en búsqueda masiva: ${data.message}`);
+      }
+    } catch (error) {
+      console.error('Error al realizar búsqueda masiva:', error);
+      alert('❌ Error al realizar búsqueda masiva. Verifica la conexión.');
+    }
+  };
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const cats = await getCategories();
+      setCategories(cats);
+    } catch (error) {
+      console.error('Error cargando categorías:', error);
+    }
+  }, [getCategories]);
+
+  // Cargar categorías al montar el componente
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
   return (
     <div className="library-container">
       <div className="library-header">
-        <h2>Mi Biblioteca</h2>
+        
         <div className="library-actions">
+          <BulkSyncToDriveButton books={safeBooks} onSyncComplete={handleSyncComplete} />
+          <CleanupCoversButton onCleanupComplete={() => console.log('Portadas limpiadas')} />
+          <CleanupTempFilesButton onCleanupComplete={(result) => {
+            console.log('Archivos temporales limpiados:', result);
+            // Opcional: mostrar notificación más detallada
+            if (result.total_files_deleted > 0) {
+              alert(`Limpieza completada:\n${result.total_files_deleted} archivos eliminados\n${result.total_size_freed_mb} MB liberados`);
+            }
+          }} />
+          <button 
+            className="bulk-search-covers-btn"
+            onClick={handleBulkSearchCovers}
+            disabled={safeBooks.length === 0}
+            title="Buscar portadas online para todos los libros"
+          >
+            🔍 Buscar Portadas
+          </button>
           <button 
             className={`selection-mode-btn ${selectionMode ? 'active' : ''}`}
             onClick={toggleSelectionMode}
@@ -286,68 +724,161 @@ function LibraryView() {
       </div>
       
       <div className="controls-container">
-        <input
-          type="text"
-          placeholder="Buscar por título, autor o categoría..."
-          className="search-bar"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+        <AdvancedSearchBar
+          searchTerm={searchTerm}
+          onSearchChange={updateSearchTerm}
+          onClear={clearSearch}
+          onToggleAdvanced={toggleAdvancedMode}
+          isAdvancedMode={isAdvancedMode}
+          suggestions={suggestions}
+          searchHistory={searchHistory}
+          isLoading={searchLoading}
+        />
+        
+        {isAdvancedMode && (
+          <SearchFilters
+            filters={filters}
+            onFiltersChange={updateFilters}
+            onClearFilters={clearAllFilters}
+          />
+        )}
+        
+        <FilterChips
+          activeFilters={getActiveFilters()}
+          onRemoveFilter={removeFilter}
+          onClearAll={clearAllFilters}
         />
       </div>
 
       {error && <p className="error-message">{error}</p>}
-      {loading && <p>Cargando libros...</p>}
-      {!loading && booksLength === 0 && !error && <p>No se encontraron libros que coincidan con tu búsqueda.</p>}
+      
+      {/* Estados de carga mejorados */}
+      {isLoading('initial') && (
+        <div className="loading-container">
+          <BookCardSkeletonGrid count={6} variant="default" />
+        </div>
+      )}
+      
+      {isLoading('search') && (
+        <div className="loading-container">
+          <LoadingSpinner 
+            size="medium" 
+            variant="dots" 
+            text="Buscando libros..." 
+            color="primary"
+          />
+        </div>
+      )}
+      
+      {isLoading('pagination') && (
+        <div className="loading-container">
+          <IndeterminateProgress 
+            text="Cargando página..." 
+            variant="default"
+            size="small"
+          />
+        </div>
+      )}
+      
+      {!isLoading('initial') && !isLoading('search') && !isLoading('pagination') && booksLength === 0 && !error && (
+        <div className="empty-state">
+          <p>No se encontraron libros que coincidan con tu búsqueda.</p>
+        </div>
+      )}
 
       <div className="book-grid">
-        {safeBooks.map((book) => (
-          <div 
-            key={book.id} 
-            className={`book-card ${book.deleting ? 'deleting' : ''} ${selectedBooks.has(book.id) ? 'selected' : ''}`}
-          >
-            {selectionMode && (
-              <input
-                type="checkbox"
-                className="book-checkbox"
-                checked={selectedBooks.has(book.id)}
-                onChange={() => toggleBookSelection(book.id)}
-              />
-            )}
-            <button 
-              onClick={() => handleDeleteClick(book.id, book.title)} 
-              className="delete-book-btn" 
-              title="Eliminar libro"
-              disabled={deletingBookId === book.id || selectionMode}
+        {safeBooks.map((book) => {
+          return (
+            <div 
+              key={book.id} 
+              className={`book-card ${book.deleting ? 'deleting' : ''} ${selectedBooks.has(book.id) ? 'selected' : ''}`}
             >
-              {deletingBookId === book.id ? '⋯' : '×'}
-            </button>
-            <BookCover 
-              src={book.cover_image_url ? `http://localhost:8001/${book.cover_image_url}` : ''}
-              alt={`Portada de ${book.title}`}
-              title={book.title}
-            />
-            <div className="book-card-info">
-              <h3>{book.title}</h3>
-              <p>{book.author}</p>
-              <span>{book.category}</span>
-            </div>
-            {book.file_path && book.file_path.toLowerCase().endsWith('.pdf') ? (
-              <a 
-                href={`http://localhost:8001/books/download/${book.id}`} 
-                className="download-button" 
-                target="_blank" 
-                rel="noopener noreferrer"
+              {selectionMode && (
+                <input
+                  type="checkbox"
+                  className="book-checkbox"
+                  checked={selectedBooks.has(book.id)}
+                  onChange={() => toggleBookSelection(book.id)}
+                />
+              )}
+              <button 
+                onClick={() => {
+                  console.log('🔍 Botón eliminar clickeado para libro:', { id: book.id, title: book.title });
+                  console.log('🔍 Estados del botón:', { deletingBookId: deletingBookId, selectionMode: selectionMode });
+                  handleDeleteClick(book.id, book.title);
+                }} 
+                className="delete-book-btn" 
+                title="Eliminar libro"
+                disabled={deletingBookId === book.id || selectionMode}
               >
-                Abrir PDF
-              </a>
-            ) : (
-              <Link to={`/leer/${book.id}`} className="download-button">
-                Leer EPUB
-              </Link>
-            )}
-          </div>
-        ))}
+                {deletingBookId === book.id ? '⋯' : '×'}
+              </button>
+              <button 
+                onClick={() => handleEditBook(book)} 
+                className="edit-book-btn" 
+                title="Editar libro"
+                disabled={selectionMode}
+              >
+                ✏️
+              </button>
+              <button 
+                onClick={() => handleSearchCoverOnline(book)} 
+                className="search-cover-btn" 
+                title="Buscar portada online"
+                disabled={selectionMode}
+              >
+                🔍
+              </button>
+              <BookCover 
+                src={book.cover_image_url || ''}
+                alt={`Portada de ${book.title}`}
+                title={book.title}
+              />
+              <div className="book-info">
+                <h3 className="book-title">{book.title}</h3>
+                <p className="book-author">{book.author}</p>
+                <div className="book-category">
+                  <span>{book.category}</span>
+                </div>
+                <LocationIndicator book={book} />
+                {book.file_path && book.file_path.toLowerCase().endsWith('.pdf') ? (
+                  <button 
+                    onClick={() => handleViewPDF(book)}
+                    className="view-pdf-btn"
+                    title="Ver PDF (prioridad: Local → Cloud)"
+                  >
+                    📄 Ver PDF
+                  </button>
+                ) : (
+                  <Link to={`/leer/${book.id}`} className="read-link">
+                    📖 Leer
+                  </Link>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      {/* Controles de paginación */}
+      {!isLoading('initial') && !isLoading('search') && !isLoading('pagination') && totalPages > 1 && (
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          perPage={perPage}
+          onPageChange={goToPage}
+          onPerPageChange={changePerPage}
+          hasNext={paginationInfo.hasNext}
+          hasPrev={paginationInfo.hasPrev}
+          startItem={paginationInfo.startItem}
+          endItem={paginationInfo.endItem}
+          pageNumbers={paginationInfo.pageNumbers}
+          showPerPageSelector={true}
+          showInfo={true}
+          className="library-pagination"
+        />
+      )}
 
       <DeleteConfirmationModal
         isOpen={deleteModal.isOpen}
@@ -356,7 +887,16 @@ function LibraryView() {
         bookTitle={deleteModal.bookTitle}
         isDeleting={deletingBookId !== null}
         isMultiple={deleteModal.isMultiple}
-        selectedCount={deleteModal.selectedIds?.length || 0}
+        selectedCount={deleteModal.selectedIds.length}
+      />
+
+      <BookEditModal
+        isOpen={editModal.isOpen}
+        onClose={handleCloseEditModal}
+        book={editModal.book}
+        onUpdate={handleBookUpdate}
+        categories={categories}
+        onCategoryCreate={handleCategoryCreate}
       />
     </div>
   );

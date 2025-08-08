@@ -1,0 +1,242 @@
+/* BookCardSkeleton.css */
+.book-card-skeleton {
+  background: var(--card-bg, #ffffff);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  transition: all 0.3s ease;
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.book-card-skeleton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* Variantes */
+.book-card-skeleton--compact {
+  max-width: 200px;
+}
+
+.book-card-skeleton--default {
+  max-width: 280px;
+}
+
+.book-card-skeleton--detailed {
+  max-width: 320px;
+}
+
+/* Portada */
+.book-card-skeleton__cover {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  background: var(--skeleton-bg, #f0f0f0);
+  overflow: hidden;
+}
+
+.book-card-skeleton__cover-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-bg, #f0f0f0) 25%,
+    var(--skeleton-shimmer, #e0e0e0) 50%,
+    var(--skeleton-bg, #f0f0f0) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Contenido */
+.book-card-skeleton__content {
+  padding: 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Líneas de texto */
+.book-card-skeleton__line {
+  height: 16px;
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-bg, #f0f0f0) 25%,
+    var(--skeleton-shimmer, #e0e0e0) 50%,
+    var(--skeleton-bg, #f0f0f0) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+.book-card-skeleton__line--title {
+  width: 90%;
+  height: 20px;
+}
+
+.book-card-skeleton__line--title-short {
+  width: 60%;
+  height: 16px;
+}
+
+.book-card-skeleton__line--author {
+  width: 70%;
+  height: 14px;
+}
+
+.book-card-skeleton__line--category {
+  width: 40%;
+  height: 12px;
+}
+
+/* Títulos y secciones */
+.book-card-skeleton__title {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.book-card-skeleton__author {
+  margin-top: 4px;
+}
+
+.book-card-skeleton__category {
+  margin-top: 8px;
+}
+
+/* Botones de acción */
+.book-card-skeleton__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.book-card-skeleton__button {
+  height: 32px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-bg, #f0f0f0) 25%,
+    var(--skeleton-shimmer, #e0e0e0) 50%,
+    var(--skeleton-bg, #f0f0f0) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.book-card-skeleton__button--primary {
+  flex: 2;
+}
+
+.book-card-skeleton__button--secondary {
+  flex: 1;
+}
+
+/* Grid de skeletons */
+.book-card-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+  padding: 20px;
+}
+
+/* Animación shimmer */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Modo oscuro */
+@media (prefers-color-scheme: dark) {
+  .book-card-skeleton {
+    --card-bg: #2a2a2a;
+    --skeleton-bg: #3a3a3a;
+    --skeleton-shimmer: #4a4a4a;
+  }
+  
+  .book-card-skeleton:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .book-card-skeleton-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+    padding: 16px;
+  }
+  
+  .book-card-skeleton__content {
+    padding: 12px;
+    gap: 8px;
+  }
+  
+  .book-card-skeleton__cover {
+    height: 240px;
+  }
+}
+
+@media (max-width: 480px) {
+  .book-card-skeleton-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    padding: 12px;
+  }
+  
+  .book-card-skeleton__cover {
+    height: 200px;
+  }
+  
+  .book-card-skeleton__content {
+    padding: 10px;
+    gap: 6px;
+  }
+  
+  .book-card-skeleton__actions {
+    flex-direction: column;
+    gap: 6px;
+  }
+  
+  .book-card-skeleton__button {
+    height: 28px;
+  }
+}
+
+/* Estados de carga */
+.book-card-skeleton--loading {
+  opacity: 0.7;
+}
+
+.book-card-skeleton--error {
+  opacity: 0.5;
+}
+
+/* Variantes específicas */
+.book-card-skeleton--compact .book-card-skeleton__cover {
+  height: 200px;
+}
+
+.book-card-skeleton--compact .book-card-skeleton__content {
+  padding: 12px;
+  gap: 8px;
+}
+
+.book-card-skeleton--detailed .book-card-skeleton__cover {
+  height: 320px;
+}
+
+.book-card-skeleton--detailed .book-card-skeleton__content {
+  padding: 20px;
+  gap: 16px;
+} 

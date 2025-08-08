@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useDriveStatus } from './hooks/useDriveStatus';
 import './ToolsView.css'; // Usaremos un CSS dedicado
 
 function EpubToPdfConverter() {
@@ -97,13 +98,42 @@ function EpubToPdfConverter() {
 
 
 function ToolsView() {
+  const { driveStatus } = useDriveStatus();
+
   return (
+    
     <div className="tools-container">
-      <h2>Herramientas de la Biblioteca</h2>
       <div className="tools-grid">
         <EpubToPdfConverter />
         {/* Aquí se podrían añadir más herramientas en el futuro */}
       </div>
+      <h2>Herramientas de la Biblioteca</h2>
+      
+      {/* Información de Google Drive */}
+      <div className="drive-info-card">
+        <h3>📁 Estado de Google Drive</h3>
+        <div className="drive-status-details">
+          <p><strong>Estado:</strong> {driveStatus.status === 'ok' ? '✅ Conectado' : '❌ No configurado'}</p>
+          {driveStatus.storageInfo && (
+            <p><strong>Almacenamiento usado:</strong> {(driveStatus.storageInfo.total_size_mb || 0).toFixed(2)} MB</p>
+          )}
+          {driveStatus.setupRequired && (
+            <div className="setup-instructions">
+              <p><strong>Configuración requerida:</strong></p>
+              <ol>
+                <li>Ve a Google Cloud Console</li>
+                <li>Habilita la API de Google Drive</li>
+                <li>Crea credenciales OAuth 2.0</li>
+                <li>Descarga el archivo credentials.json</li>
+                <li>Colócalo en la carpeta backend/</li>
+                <li>Ejecuta: python setup_google_drive.py</li>
+              </ol>
+            </div>
+          )}
+        </div>
+      </div>
+
+      
     </div>
   );
 }

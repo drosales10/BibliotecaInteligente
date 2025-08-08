@@ -1,6 +1,6 @@
-# 📚 Documentación de la Librería Inteligente
+# 📚 Documentación de la Biblioteca Inteligente
 
-Este directorio contiene toda la documentación del proyecto **Mi Librería Inteligente**.
+Este directorio contiene toda la documentación del proyecto **Mi Biblioteca Inteligente**.
 
 ## 📋 Índice de Documentación
 

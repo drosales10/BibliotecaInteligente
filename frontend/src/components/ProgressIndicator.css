@@ -1,0 +1,416 @@
+/* ProgressIndicator.css */
+.progress-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--progress-bg, #f8f9fa);
+  border: 1px solid var(--progress-border, #e9ecef);
+  transition: all 0.3s ease;
+}
+
+/* Tamaños */
+.progress-indicator--small {
+  padding: 8px;
+  gap: 6px;
+}
+
+.progress-indicator--large {
+  padding: 16px;
+  gap: 12px;
+}
+
+/* Estados */
+.progress-indicator--loading {
+  --progress-color: #007bff;
+  --progress-bg: #f8f9fa;
+  --progress-border: #e9ecef;
+}
+
+.progress-indicator--success {
+  --progress-color: #28a745;
+  --progress-bg: #f8fff9;
+  --progress-border: #d4edda;
+}
+
+.progress-indicator--error {
+  --progress-color: #dc3545;
+  --progress-bg: #fff8f8;
+  --progress-border: #f5c6cb;
+}
+
+.progress-indicator--warning {
+  --progress-color: #ffc107;
+  --progress-bg: #fffbf0;
+  --progress-border: #ffeaa7;
+}
+
+.progress-indicator--paused {
+  --progress-color: #6c757d;
+  --progress-bg: #f8f9fa;
+  --progress-border: #e9ecef;
+}
+
+/* Header */
+.progress-indicator__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-indicator__text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-color, #333);
+  flex: 1;
+}
+
+.progress-indicator__percentage {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--progress-color);
+  min-width: 40px;
+  text-align: right;
+}
+
+/* Barra de progreso */
+.progress-indicator__bar-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-indicator__bar {
+  flex: 1;
+  height: 8px;
+  background: var(--progress-bg-secondary, #e9ecef);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-indicator--small .progress-indicator__bar {
+  height: 6px;
+}
+
+.progress-indicator--large .progress-indicator__bar {
+  height: 12px;
+}
+
+.progress-indicator__bar-fill {
+  height: 100%;
+  background: var(--progress-color);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-indicator__bar-fill--animated {
+  background: linear-gradient(
+    90deg,
+    var(--progress-color) 0%,
+    var(--progress-color-light, var(--progress-color)) 50%,
+    var(--progress-color) 100%
+  );
+  background-size: 200% 100%;
+  animation: progressShimmer 2s ease-in-out infinite;
+}
+
+/* Variantes */
+.progress-indicator--striped .progress-indicator__bar-fill {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.15) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.15) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 1rem 1rem;
+  animation: progressStripes 1s linear infinite;
+}
+
+.progress-indicator--gradient .progress-indicator__bar-fill {
+  background: linear-gradient(
+    90deg,
+    var(--progress-color) 0%,
+    var(--progress-color-light, var(--progress-color)) 100%
+  );
+}
+
+/* Botón de cancelar */
+.progress-indicator__cancel-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted, #6c757d);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  font-size: 12px;
+  opacity: 0;
+  transition: all 0.2s ease;
+  min-width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.progress-indicator__cancel-btn:hover {
+  background: var(--hover-bg, rgba(0, 0, 0, 0.05));
+  color: var(--text-color, #333);
+}
+
+.progress-indicator__cancel-btn--visible {
+  opacity: 1;
+}
+
+/* Detalles */
+.progress-indicator__details {
+  font-size: 12px;
+  color: var(--text-muted, #6c757d);
+  text-align: center;
+}
+
+/* Variante circular */
+.progress-indicator--circular {
+  align-items: center;
+  text-align: center;
+  padding: 20px;
+}
+
+.progress-indicator__circular {
+  position: relative;
+  display: inline-block;
+}
+
+.progress-indicator__circular-svg {
+  transform: rotate(-90deg);
+}
+
+.progress-indicator__circular-bg {
+  fill: none;
+  stroke: var(--progress-bg-secondary, #e9ecef);
+}
+
+.progress-indicator__circular-progress {
+  fill: none;
+  stroke: var(--progress-color);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.3s ease;
+}
+
+.progress-indicator__circular-progress--animated {
+  animation: circularProgress 2s ease-in-out infinite;
+}
+
+.progress-indicator__circular-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress-indicator__circular-percentage {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--progress-color);
+}
+
+.progress-indicator__circular-text {
+  font-size: 12px;
+  color: var(--text-muted, #6c757d);
+}
+
+/* Multi progress */
+.multi-progress-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Indeterminate progress */
+.indeterminate-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--progress-bg, #f8f9fa);
+  border: 1px solid var(--progress-border, #e9ecef);
+}
+
+.indeterminate-progress__bar {
+  height: 8px;
+  background: var(--progress-bg-secondary, #e9ecef);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.indeterminate-progress--small .indeterminate-progress__bar {
+  height: 6px;
+}
+
+.indeterminate-progress--large .indeterminate-progress__bar {
+  height: 12px;
+}
+
+.indeterminate-progress__bar-fill {
+  height: 100%;
+  background: var(--progress-color, #007bff);
+  border-radius: 4px;
+  animation: indeterminateProgress 1.5s ease-in-out infinite;
+}
+
+.indeterminate-progress__text {
+  font-size: 14px;
+  color: var(--text-color, #333);
+  text-align: center;
+}
+
+/* Animaciones */
+@keyframes progressShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes progressStripes {
+  0% {
+    background-position: 1rem 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+@keyframes circularProgress {
+  0%, 100% {
+    stroke-dasharray: 1, 150;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 90, 150;
+    stroke-dashoffset: -35;
+  }
+}
+
+@keyframes indeterminateProgress {
+  0% {
+    transform: translateX(-100%);
+    width: 30%;
+  }
+  50% {
+    transform: translateX(0%);
+    width: 70%;
+  }
+  100% {
+    transform: translateX(100%);
+    width: 30%;
+  }
+}
+
+/* Modo oscuro */
+@media (prefers-color-scheme: dark) {
+  .progress-indicator {
+    --progress-bg: #2a2a2a;
+    --progress-border: #404040;
+    --progress-bg-secondary: #404040;
+    --text-color: #e0e0e0;
+    --text-muted: #a0a0a0;
+    --hover-bg: rgba(255, 255, 255, 0.1);
+  }
+  
+  .progress-indicator--loading {
+    --progress-color: #4dabf7;
+  }
+  
+  .progress-indicator--success {
+    --progress-color: #51cf66;
+    --progress-bg: #2b2f2b;
+    --progress-border: #2f513f;
+  }
+  
+  .progress-indicator--error {
+    --progress-color: #ff6b6b;
+    --progress-bg: #2f2b2b;
+    --progress-border: #513f3f;
+  }
+  
+  .progress-indicator--warning {
+    --progress-color: #ffd43b;
+    --progress-bg: #2f2e2b;
+    --progress-border: #514f3f;
+  }
+  
+  .progress-indicator--paused {
+    --progress-color: #868e96;
+  }
+  
+  .indeterminate-progress {
+    --progress-bg: #2a2a2a;
+    --progress-border: #404040;
+    --progress-bg-secondary: #404040;
+    --text-color: #e0e0e0;
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .progress-indicator__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .progress-indicator__percentage {
+    text-align: left;
+  }
+  
+  .progress-indicator__text {
+    font-size: 13px;
+  }
+  
+  .progress-indicator__details {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .progress-indicator {
+    padding: 10px;
+    gap: 6px;
+  }
+  
+  .progress-indicator__text {
+    font-size: 12px;
+  }
+  
+  .progress-indicator__percentage {
+    font-size: 12px;
+  }
+  
+  .progress-indicator__details {
+    font-size: 10px;
+  }
+  
+  .progress-indicator__circular-percentage {
+    font-size: 14px;
+  }
+  
+  .progress-indicator__circular-text {
+    font-size: 11px;
+  }
+} 

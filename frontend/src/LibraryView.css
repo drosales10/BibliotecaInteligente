@@ -1,394 +1,722 @@
-.library-container {
-  width: 100%;
-  padding: 20px;
-  box-sizing: border-box;
+/* Estilos responsivos mejorados - Fase 2.3 */
+
+/* Variables CSS para breakpoints */
+:root {
+  --mobile-breakpoint: 768px;
+  --tablet-breakpoint: 1024px;
+  --desktop-breakpoint: 1200px;
+  --large-desktop-breakpoint: 1440px;
 }
 
+/* Contenedor principal responsivo */
+.library-container {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 1rem;
+  transition: all 0.3s ease;
+}
+
+/* Header responsivo */
 .library-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 15px;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
 }
 
-.library-container h2 {
-  color: #61dafb;
-  border-bottom: 2px solid #61dafb;
-  padding-bottom: 10px;
+.library-header h2 {
   margin: 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .library-actions {
   display: flex;
-  gap: 10px;
   flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
 }
 
-.selection-mode-btn, .select-all-btn, .deselect-all-btn, .bulk-delete-btn {
-  padding: 8px 16px;
-  border: 1px solid #61dafb;
-  border-radius: 6px;
-  background-color: #282c34;
-  color: #61dafb;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: bold;
-  transition: all 0.2s;
+/* Estilos para los botones de limpieza */
+.library-actions .cleanup-covers-container,
+.library-actions .cleanup-temp-files-container {
+  margin: 0;
 }
 
-.selection-mode-btn:hover, .select-all-btn:hover, .deselect-all-btn:hover {
-  background-color: #3a3f4a;
-}
-
-.selection-mode-btn.active {
-  background-color: #61dafb;
-  color: #282c34;
-}
-
-.bulk-delete-btn {
-  background-color: #dc3545;
-  border-color: #dc3545;
+/* Botón de búsqueda masiva de portadas */
+.bulk-search-covers-btn {
+  background: linear-gradient(135deg, #007bff, #0056b3);
   color: white;
-}
-
-.bulk-delete-btn:hover:not(:disabled) {
-  background-color: #c82333;
-  border-color: #c82333;
-}
-
-.bulk-delete-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.controls-container {
-  margin-bottom: 20px;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
   display: flex;
-  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
 }
 
-.search-bar {
-  width: 100%;
-  max-width: 500px;
-  padding: 12px 20px;
-  font-size: 1rem;
-  color: #e6e6e6;
-  background-color: #3a3f4a;
-  border: 1px solid #61dafb;
-  border-radius: 25px;
-  outline: none;
+.bulk-search-covers-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0056b3, #004085);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+}
+
+.bulk-search-covers-btn:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Controles responsivos */
+.controls-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+}
+
+/* Grid de libros responsivo */
+.book-grid {
+  display: grid;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
   transition: all 0.3s ease;
 }
 
-.search-bar:focus {
-  box-shadow: 0 0 10px rgba(97, 218, 251, 0.5);
-  border-color: #88e1fb;
-}
-
-.category-filters {
-  margin-bottom: 30px;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-}
-
-.category-filters > button { /* Estilo para el botón "Todas" */
-  background-color: #3a3f4a;
-  border: 1px solid #61dafb;
-  color: #61dafb;
-  padding: 8px 16px;
-  border-radius: 20px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: bold;
-  transition: background-color 0.2s, color 0.2s;
-}
-
-.category-chip {
-  display: flex;
-  align-items: center;
-  background-color: #3a3f4a;
-  border: 1px solid #61dafb;
-  border-radius: 20px;
-  overflow: hidden;
-}
-
-.category-chip button {
-  background-color: transparent;
-  border: none;
-  color: #61dafb;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: bold;
-  padding: 8px 0 8px 16px;
-  transition: background-color 0.2s, color 0.2s;
-}
-
-.category-chip .delete-chip-btn {
-  padding: 8px 10px 8px 8px;
-  font-size: 1.2rem;
-  line-height: 1;
-  color: #ff6b6b;
-}
-.category-chip .delete-chip-btn:hover {
-  color: #e03131;
-}
-
-.category-filters button:hover, .category-chip button:hover {
-  background-color: #4a505c;
-}
-
-.category-filters > button.active, .category-chip button.active {
-  background-color: #61dafb;
-  color: #282c34;
-}
-
-.book-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 25px;
-}
-
+/* Tarjeta de libro responsiva */
 .book-card {
-  position: relative; /* Para posicionar el botón de eliminar */
-  background-color: #282c34;
-  border-radius: 8px;
+  position: relative;
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
   overflow: hidden;
+  transition: all 0.3s ease;
+  min-height: 400px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s, opacity 0.3s ease-out, border-color 0.2s;
 }
 
 .book-card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-4px);
+  box-shadow: var(--card-shadow-hover);
 }
 
 .book-card.selected {
-  border: 2px solid #61dafb;
-  box-shadow: 0 0 15px rgba(97, 218, 251, 0.3);
+  border: 2px solid var(--primary-color);
+  box-shadow: 0 0 0 4px rgba(var(--primary-color-rgb), 0.1);
 }
 
 .book-card.deleting {
-  opacity: 0;
-  transform: scale(0.8);
+  opacity: 0.5;
   pointer-events: none;
 }
 
-.book-checkbox {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  width: 20px;
-  height: 20px;
-  z-index: 15;
-  cursor: pointer;
-  accent-color: #61dafb;
+/* Información del libro responsiva */
+.book-info {
+  padding: 1rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
-.delete-book-btn {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  background-color: rgba(0, 0, 0, 0.6);
+.book-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.book-author {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0;
+  font-style: italic;
+}
+
+.book-category {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: var(--primary-color);
   color: white;
-  border: none;
-  border-radius: 50%;
-  width: 28px;
-  height: 28px;
-  font-size: 20px;
-  line-height: 28px;
-  text-align: center;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.2s, background-color 0.2s;
-  z-index: 10;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  align-self: flex-start;
 }
 
-.delete-book-btn:hover {
-  background-color: rgba(255, 107, 107, 0.8);
-}
-
-.delete-book-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.book-card:hover .delete-book-btn {
-  opacity: 1;
-}
-
-.book-cover {
-  width: 100%;
-  height: 280px;
-  object-fit: cover;
-  background-color: #3a3f4a;
-}
-
-.generic-cover {
-  width: 100%;
-  height: 280px;
+/* Indicador de ubicación responsivo */
+.location-indicator {
   display: flex;
   align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  align-self: flex-start;
+}
+
+.location-local {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+}
+
+.location-cloud {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+/* Botones responsivos */
+.view-pdf-btn, .read-link {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #4a505c, #282c34);
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--primary-color);
   color: white;
-  font-size: 5rem;
-  font-weight: bold;
-}
-
-.generic-cover-initial {
-  opacity: 0.5;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-}
-
-.book-card-info {
-  padding: 15px;
-  text-align: left;
-  flex-grow: 1;
-}
-
-.book-card-info h3 { font-size: 1.1rem; margin: 0 0 5px 0; color: white; }
-.book-card-info p { font-size: 0.9rem; margin: 0 0 10px 0; color: #ccc; }
-.book-card-info span { font-size: 0.8rem; background-color: #61dafb; color: #282c34; padding: 3px 8px; border-radius: 12px; font-weight: bold; }
-
-.download-button {
-  display: block;
-  width: 100%;
-  padding: 10px;
-  background-color: #4CAF50;
-  color: white;
-  text-align: center;
   text-decoration: none;
-  font-weight: bold;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
   border: none;
   cursor: pointer;
-  transition: background-color 0.2s;
+  font-size: 0.9rem;
 }
 
-.download-button:hover { background-color: #45a049; }
-.error-message { color: #ff6b6b; }
+.view-pdf-btn:hover, .read-link:hover {
+  background: var(--primary-color-dark);
+  transform: translateY(-1px);
+}
 
-/* Modal de confirmación */
+/* Estados de carga responsivos */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 3rem 1rem;
+  min-height: 200px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--text-secondary);
+}
+
+/* Paginación responsiva */
+.library-pagination {
+  margin-top: 2rem;
+  padding: 1rem;
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+}
+
+/* Modal responsivo */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  animation: fadeIn 0.2s ease-out;
+  padding: 1rem;
 }
 
 .modal-content {
-  background-color: #282c34;
-  border: 2px solid #61dafb;
+  background: var(--card-bg);
   border-radius: 12px;
-  padding: 30px;
-  max-width: 400px;
-  width: 90%;
-  text-align: center;
-  animation: slideIn 0.3s ease-out;
+  padding: 2rem;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: var(--card-shadow);
 }
 
 .modal-content h3 {
-  color: #61dafb;
-  margin: 0 0 15px 0;
-  font-size: 1.3rem;
-}
-
-.modal-content p {
-  color: #e6e6e6;
-  margin: 0 0 10px 0;
-  line-height: 1.5;
-}
-
-.warning-text {
-  color: #ff6b6b !important;
-  font-weight: bold;
-  font-size: 0.9rem;
+  margin: 0 0 1rem 0;
+  color: var(--text-primary);
 }
 
 .modal-actions {
   display: flex;
-  gap: 15px;
-  justify-content: center;
-  margin-top: 25px;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
 }
 
 .btn-cancel, .btn-delete {
-  padding: 12px 24px;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
   border: none;
-  border-radius: 6px;
-  font-size: 1rem;
-  font-weight: bold;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
-  min-width: 100px;
+  transition: all 0.2s ease;
+  flex: 1;
+  min-width: 120px;
 }
 
 .btn-cancel {
-  background-color: #6c757d;
+  background: var(--secondary-color);
   color: white;
-}
-
-.btn-cancel:hover:not(:disabled) {
-  background-color: #5a6268;
 }
 
 .btn-delete {
-  background-color: #dc3545;
+  background: var(--danger-color);
   color: white;
 }
 
-.btn-delete:hover:not(:disabled) {
-  background-color: #c82333;
+.delete-book-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(220, 53, 69, 0.9);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  z-index: 10;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.btn-cancel:disabled, .btn-delete:disabled {
-  opacity: 0.6;
+/* Estilos mejorados para botones de selección */
+
+/* Botón principal de modo selección */
+.selection-mode-btn {
+  background: linear-gradient(135deg, #6c757d, #495057);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 2px 4px rgba(108, 117, 125, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.selection-mode-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.selection-mode-btn:hover::before {
+  left: 100%;
+}
+
+.selection-mode-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #495057, #343a40);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(108, 117, 125, 0.3);
+}
+
+.selection-mode-btn.active {
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+}
+
+.selection-mode-btn.active:hover {
+  background: linear-gradient(135deg, #c82333, #a71e2a);
+  box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4);
+}
+
+.selection-mode-btn:disabled {
+  background: #adb5bd;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Botones de selección masiva */
+.select-all-btn, .deselect-all-btn {
+  background: linear-gradient(135deg, #17a2b8, #138496);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  box-shadow: 0 2px 4px rgba(23, 162, 184, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.select-all-btn::before, .deselect-all-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.select-all-btn:hover::before, .deselect-all-btn:hover::before {
+  left: 100%;
+}
+
+.select-all-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #138496, #117a8b);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(23, 162, 184, 0.3);
+}
+
+.deselect-all-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #138496, #117a8b);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(23, 162, 184, 0.3);
+}
+
+.select-all-btn:disabled, .deselect-all-btn:disabled {
+  background: #adb5bd;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Botón de eliminación masiva */
+.bulk-delete-btn {
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+  position: relative;
+  overflow: hidden;
+  animation: pulse-warning 2s infinite;
+}
+
+@keyframes pulse-warning {
+  0% {
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+  }
+  50% {
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.4), 0 0 0 4px rgba(220, 53, 69, 0.1);
+  }
+  100% {
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+  }
+}
+
+.bulk-delete-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.bulk-delete-btn:hover::before {
+  left: 100%;
+}
+
+.bulk-delete-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #c82333, #a71e2a);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4);
+  animation: none;
+}
+
+.bulk-delete-btn:disabled {
+  background: #adb5bd;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  animation: none;
+}
+
+/* Checkbox personalizado para selección de libros */
+.book-checkbox {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  z-index: 15;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid #6c757d;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.book-checkbox:checked {
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  border-color: #007bff;
+  transform: scale(1.1);
+}
+
+.book-checkbox:checked::after {
+  content: '✓';
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.book-checkbox:hover {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
+}
+
+.book-checkbox:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.3);
+}
+
+/* Indicador visual cuando el libro está seleccionado */
+.book-card.selected {
+  border: 2px solid #007bff;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.book-card.selected::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(0, 123, 255, 0.1), rgba(0, 86, 179, 0.1));
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.delete-book-btn:hover:not(:disabled) {
+  background: rgba(220, 53, 69, 1);
+  transform: scale(1.1);
+}
+
+.delete-book-btn:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-/* Animaciones */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.edit-book-btn {
+  position: absolute;
+  top: 8px;
+  right: 48px;
+  background: rgba(40, 167, 69, 0.9);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 14px;
+  z-index: 10;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-20px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+.edit-book-btn:hover:not(:disabled) {
+  background: rgba(40, 167, 69, 1);
+  transform: scale(1.1);
 }
 
-/* Responsive design */
+.edit-book-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.search-cover-btn {
+  position: absolute;
+  top: 8px;
+  right: 88px;
+  background: rgba(0, 123, 255, 0.9);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 14px;
+  z-index: 10;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-cover-btn:hover:not(:disabled) {
+  background: rgba(0, 123, 255, 1);
+  transform: scale(1.1);
+}
+
+.search-cover-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Breakpoints responsivos */
+
+/* Móvil (hasta 768px) */
 @media (max-width: 768px) {
+  .library-container {
+    padding: 0.5rem;
+  }
+  
   .library-header {
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  
+  .library-header h2 {
+    font-size: 1.5rem;
+  }
+  
+  .library-actions {
     flex-direction: column;
     align-items: stretch;
   }
   
-  .library-actions {
-    justify-content: center;
+  .library-actions button {
+    width: 100%;
+    padding: 0.75rem;
+    font-size: 0.9rem;
+  }
+  
+  /* Botones de selección en móvil */
+  .selection-mode-btn,
+  .select-all-btn,
+  .deselect-all-btn,
+  .bulk-delete-btn {
+    padding: 0.6rem 1rem;
+    font-size: 0.8rem;
+    border-radius: 6px;
+    gap: 0.3rem;
+  }
+  
+  .book-checkbox {
+    width: 18px;
+    height: 18px;
+    top: 10px;
+    left: 10px;
+  }
+  
+  .controls-container {
+    padding: 0.75rem;
+    margin-bottom: 1rem;
   }
   
   .book-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 15px;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .book-card {
+    min-height: 350px;
+  }
+  
+  .book-info {
+    padding: 0.75rem;
+  }
+  
+  .book-title {
+    font-size: 1rem;
+  }
+  
+  .view-pdf-btn, .read-link {
+    padding: 0.6rem 0.8rem;
+    font-size: 0.85rem;
+  }
+  
+  .edit-book-btn {
+    top: 6px;
+    right: 44px;
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+  
+  .search-cover-btn {
+    top: 6px;
+    right: 78px;
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+  
+  .delete-book-btn {
+    top: 6px;
+    right: 6px;
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+  
+  .modal-content {
+    padding: 1.5rem;
+    margin: 1rem;
   }
   
   .modal-actions {
@@ -400,34 +728,300 @@
   }
 }
 
-/* Modo oscuro - asegurar que los colores sean consistentes */
+/* Tablet (768px - 1024px) */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .library-container {
+    padding: 1rem;
+    max-width: 100%;
+  }
+  
+  .book-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+  }
+  
+  .library-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  
+  .library-actions button {
+    flex: 1;
+    min-width: 150px;
+  }
+  
+  /* Botones de selección en tablet */
+  .selection-mode-btn,
+  .select-all-btn,
+  .deselect-all-btn,
+  .bulk-delete-btn {
+    min-width: 140px;
+    padding: 0.7rem 1rem;
+    font-size: 0.85rem;
+  }
+  
+  .controls-container {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+}
+
+/* Desktop pequeño (1024px - 1200px) */
+@media (min-width: 1025px) and (max-width: 1200px) {
+  .library-container {
+    max-width: 1000px;
+    padding: 1.5rem;
+  }
+  
+  .book-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+  
+  .library-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
+
+/* Desktop (1200px - 1440px) */
+@media (min-width: 1201px) and (max-width: 1440px) {
+  .library-container {
+    max-width: 1200px;
+    padding: 2rem;
+  }
+  
+  .book-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.75rem;
+  }
+}
+
+/* Desktop grande (más de 1440px) */
+@media (min-width: 1441px) {
+  .library-container {
+    max-width: 1400px;
+    padding: 2.5rem;
+  }
+  
+  .book-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 2rem;
+  }
+  
+  .book-card {
+    min-height: 450px;
+  }
+  
+  .book-title {
+    font-size: 1.2rem;
+  }
+}
+
+/* Orientación landscape en móviles */
+@media (max-width: 768px) and (orientation: landscape) {
+  .book-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .library-header {
+    flex-direction: row;
+  }
+  
+  .library-actions {
+    flex-direction: row;
+  }
+}
+
+/* Modo de alta densidad de píxeles */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .book-card {
+    border-radius: 8px;
+  }
+  
+  .view-pdf-btn, .read-link {
+    border-radius: 6px;
+  }
+}
+
+/* Modo de contraste alto */
+@media (prefers-contrast: high) {
+  .book-card {
+    border: 2px solid var(--text-primary);
+  }
+  
+  .view-pdf-btn, .read-link {
+    border: 2px solid currentColor;
+  }
+}
+
+/* Modo de movimiento reducido */
+@media (prefers-reduced-motion: reduce) {
+  .book-card,
+  .view-pdf-btn,
+  .read-link,
+  .library-container {
+    transition: none;
+  }
+  
+  .book-card:hover {
+    transform: none;
+  }
+  
+  /* Botones de selección con movimiento reducido */
+  .selection-mode-btn,
+  .select-all-btn,
+  .deselect-all-btn,
+  .bulk-delete-btn,
+  .book-checkbox {
+    transition: none;
+  }
+  
+  .selection-mode-btn::before,
+  .select-all-btn::before,
+  .deselect-all-btn::before,
+  .bulk-delete-btn::before {
+    display: none;
+  }
+  
+  .bulk-delete-btn {
+    animation: none;
+  }
+  
+  .book-checkbox:checked {
+    transform: none;
+  }
+  
+  .book-card.selected {
+    transform: none;
+  }
+}
+
+/* Modo oscuro mejorado */
 @media (prefers-color-scheme: dark) {
-  .modal-content {
-    background-color: #1a1d23;
-    border-color: #61dafb;
+  .library-header,
+  .controls-container,
+  .book-card,
+  .modal-content,
+  .library-pagination {
+    background: var(--card-bg-dark);
+    box-shadow: var(--card-shadow-dark);
   }
   
-  .modal-content h3 {
-    color: #61dafb;
+  .book-card:hover {
+    box-shadow: var(--card-shadow-hover-dark);
   }
   
-  .modal-content p {
-    color: #e6e6e6;
+  /* Botones de selección en modo oscuro */
+  .selection-mode-btn {
+    background: linear-gradient(135deg, #4a5568, #2d3748);
   }
   
-  .btn-cancel {
-    background-color: #495057;
+  .selection-mode-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #2d3748, #1a202c);
   }
   
-  .btn-cancel:hover:not(:disabled) {
-    background-color: #343a40;
+  .selection-mode-btn.active {
+    background: linear-gradient(135deg, #e53e3e, #c53030);
   }
   
-  .selection-mode-btn, .select-all-btn, .deselect-all-btn {
-    background-color: #1a1d23;
+  .selection-mode-btn.active:hover {
+    background: linear-gradient(135deg, #c53030, #9b2c2c);
   }
   
-  .selection-mode-btn:hover, .select-all-btn:hover, .deselect-all-btn:hover {
-    background-color: #2a2d33;
+  .select-all-btn, .deselect-all-btn {
+    background: linear-gradient(135deg, #2b6cb0, #2c5282);
+  }
+  
+  .select-all-btn:hover:not(:disabled),
+  .deselect-all-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #2c5282, #1a365d);
+  }
+  
+  .bulk-delete-btn {
+    background: linear-gradient(135deg, #e53e3e, #c53030);
+  }
+  
+  .bulk-delete-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #c53030, #9b2c2c);
+  }
+  
+  .book-checkbox {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #718096;
+  }
+  
+  .book-checkbox:checked {
+    background: linear-gradient(135deg, #3182ce, #2c5282);
+    border-color: #3182ce;
+  }
+  
+  .book-checkbox:hover {
+    border-color: #3182ce;
+  }
+  
+  .book-card.selected {
+    border-color: #3182ce;
+    background: linear-gradient(135deg, rgba(49, 130, 206, 0.1), rgba(44, 82, 130, 0.1));
+  }
+}
+
+/* Accesibilidad mejorada */
+@media (prefers-reduced-motion: no-preference) {
+  .book-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  .view-pdf-btn, .read-link {
+    transition: all 0.2s ease;
+  }
+}
+
+/* Focus visible para navegación por teclado */
+.book-card:focus-visible,
+.view-pdf-btn:focus-visible,
+.read-link:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Focus para botones de selección */
+.selection-mode-btn:focus-visible,
+.select-all-btn:focus-visible,
+.deselect-all-btn:focus-visible,
+.bulk-delete-btn:focus-visible {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(0, 123, 255, 0.2);
+}
+
+.book-checkbox:focus-visible {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(0, 123, 255, 0.2);
+}
+
+/* Estados de carga específicos por dispositivo */
+@media (max-width: 768px) {
+  .loading-container {
+    padding: 2rem 0.5rem;
+    min-height: 150px;
+  }
+  
+  .empty-state {
+    padding: 2rem 0.5rem;
+  }
+}
+
+@media (min-width: 1441px) {
+  .loading-container {
+    padding: 4rem 2rem;
+    min-height: 300px;
+  }
+  
+  .empty-state {
+    padding: 4rem 2rem;
   }
 }

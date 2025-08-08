@@ -1,0 +1,421 @@
+/* Botón de activación */
+.drive-status-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+}
+
+.drive-status-trigger:hover {
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.drive-status-trigger.status-ok {
+  border-color: var(--success-color);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.drive-status-trigger.status-error,
+.drive-status-trigger.status-connection_error {
+  border-color: var(--error-color);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.drive-status-trigger.status-timeout {
+  border-color: var(--warning-color);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.drive-status-trigger.status-warning,
+.drive-status-trigger.status-partial {
+  border-color: var(--warning-color);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.drive-status-trigger.status-unknown {
+  border-color: var(--border-medium);
+  background: rgba(158, 158, 158, 0.1);
+}
+
+.trigger-icon {
+  font-size: 1rem;
+}
+
+.trigger-text {
+  font-weight: 600;
+}
+
+/* Overlay del modal */
+.drive-status-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal);
+  animation: fadeIn 0.3s ease-out;
+  padding: var(--space-4);
+  min-height: 100vh;
+}
+
+/* Modal principal */
+.drive-status-modal {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  max-width: 500px;
+  width: 100%;
+  max-height: 80vh;
+  overflow: hidden;
+  animation: slideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border: 1px solid var(--border-light);
+  position: relative;
+  transform-origin: center;
+  backdrop-filter: blur(10px);
+  margin: auto;
+}
+
+/* Header del modal */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-secondary);
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.modal-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Contenido del modal */
+.modal-content {
+  padding: var(--space-6);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* Header del estado */
+.status-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+}
+
+.status-icon {
+  font-size: 1.5rem;
+}
+
+.status-text {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Mensaje de error */
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--error-color);
+  border-radius: var(--radius-lg);
+  color: var(--error-color);
+}
+
+.error-icon {
+  font-size: 1.2rem;
+}
+
+.error-text {
+  font-weight: 500;
+}
+
+.retry-info {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+/* Detalles del estado */
+.status-details {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+}
+
+/* Información de almacenamiento */
+.storage-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.storage-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.storage-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.storage-value {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* Información de salud */
+.health-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.health-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.health-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.health-value {
+  font-weight: 500;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+}
+
+.health-value.healthy,
+.health-value.success {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success-color);
+}
+
+.health-value.unhealthy,
+.health-value.failed {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error-color);
+}
+
+/* Información de caché */
+.cache-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+}
+
+.cache-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.cache-status {
+  font-weight: 500;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+}
+
+.cache-status.valid {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success-color);
+}
+
+.cache-status.invalid {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error-color);
+}
+
+.cache-timestamp {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+/* Indicador de carga */
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+}
+
+.loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-light);
+  border-top: 2px solid var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Acciones del modal */
+.modal-actions {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--border-light);
+  background: var(--bg-secondary);
+}
+
+.action-button {
+  flex: 1;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.action-button:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.action-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.refresh-button {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.refresh-button:hover:not(:disabled) {
+  background: var(--primary-color);
+  color: var(--text-inverse);
+}
+
+.clear-cache-button {
+  border-color: var(--error-color);
+  color: var(--error-color);
+}
+
+.clear-cache-button:hover:not(:disabled) {
+  background: var(--error-color);
+  color: var(--text-inverse);
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .drive-status-modal-overlay {
+    padding: var(--space-2);
+  }
+  
+  .drive-status-modal {
+    width: 100%;
+    max-height: 90vh;
+  }
+  
+  .modal-header {
+    padding: var(--space-3) var(--space-4);
+  }
+  
+  .modal-content {
+    padding: var(--space-4);
+  }
+  
+  .modal-actions {
+    padding: var(--space-3) var(--space-4);
+    flex-direction: column;
+  }
+  
+  .action-button {
+    width: 100%;
+  }
+  
+  .drive-status-trigger {
+    padding: var(--space-1) var(--space-2);
+    font-size: 0.8rem;
+  }
+  
+  .trigger-text {
+    display: none;
+  }
+} 
