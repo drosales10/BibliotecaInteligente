@@ -474,20 +474,44 @@ def translate_category_to_spanish(category: str) -> str:
     return category.strip().title()
 
 # --- Configuración de la App FastAPI ---
-app = FastAPI()
+app = FastAPI(
+    title="Biblioteca Inteligente API",
+    description="API para gestión inteligente de biblioteca con IA",
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+# Configuración de CORS mejorada para dispositivos móviles
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://localhost:8001",
+        "http://192.168.100.6:3000",
+        "http://192.168.100.6:8001",
+        "http://192.168.100.4:3000",
+        "http://192.168.100.4:8001",
+        "http://192.168.1.100:3000",
+        "http://192.168.1.100:8001",
+        "http://192.168.0.100:3000",
+        "http://192.168.0.100:8001",
+        # Permitir cualquier origen en desarrollo (remover en producción)
+        "*"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["Content-Disposition", "Content-Length", "Content-Type"],
+    max_age=3600,
+)
+
 STATIC_COVERS_DIR = "static/covers"
 os.makedirs(STATIC_COVERS_DIR, exist_ok=True)
 STATIC_TEMP_DIR = "temp_books"
 os.makedirs(STATIC_TEMP_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/temp_books", StaticFiles(directory=STATIC_TEMP_DIR), name="temp_books")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8001"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 def get_db():
     db = database.SessionLocal()

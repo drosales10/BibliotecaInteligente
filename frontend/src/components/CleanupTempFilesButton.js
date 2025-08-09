@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getBackendUrl } from '../config/api';
 import './CleanupTempFilesButton.css';
 
 const CleanupTempFilesButton = ({ onCleanupComplete }) => {
@@ -23,7 +24,7 @@ const CleanupTempFilesButton = ({ onCleanupComplete }) => {
     setMessage('');
 
     try {
-      const response = await fetch('http://localhost:8001/api/cleanup-temp-files', {
+      const response = await fetch(`${getBackendUrl()}/api/cleanup-temp-files`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

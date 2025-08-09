@@ -1,5 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { useDriveStatus } from './hooks/useDriveStatus';
+import { getBackendUrl } from './config/api';
+import CleanupCoversButton from './components/CleanupCoversButton';
+import CleanupTempFilesButton from './components/CleanupTempFilesButton';
 import './ToolsView.css'; // Usaremos un CSS dedicado
 
 function EpubToPdfConverter() {
@@ -43,7 +46,7 @@ function EpubToPdfConverter() {
     setMessage('Convirtiendo archivo... Esto puede tardar un momento.');
 
     try {
-      const response = await fetch('http://localhost:8001/tools/convert-epub-to-pdf', {
+      const response = await fetch(`${getBackendUrl()}/tools/convert-epub-to-pdf`, {
         method: 'POST',
         body: formData,
       });
@@ -51,7 +54,7 @@ function EpubToPdfConverter() {
       if (response.ok) {
         // El backend ahora devuelve un JSON con la URL de descarga
         const result = await response.json();
-        const downloadUrl = `http://localhost:8001${result.download_url}`;
+        const downloadUrl = `${getBackendUrl()}${result.download_url}`;
         
         // Crear un enlace y hacer clic para iniciar la descarga
         const a = document.createElement('a');
@@ -105,6 +108,27 @@ function ToolsView() {
     <div className="tools-container">
       <div className="tools-grid">
         <EpubToPdfConverter />
+        
+        {/* Herramientas de Limpieza */}
+        <div className="tool-card">
+          <h3>🧹 Herramientas de Limpieza</h3>
+          <p>Mantén tu biblioteca organizada y libera espacio de almacenamiento.</p>
+          
+          <div className="cleanup-tools">
+            <CleanupCoversButton 
+              onCleanupComplete={() => console.log('Portadas limpiadas')} 
+            />
+            <CleanupTempFilesButton 
+              onCleanupComplete={(result) => {
+                console.log('Archivos temporales limpiados:', result);
+                if (result.total_files_deleted > 0) {
+                  alert(`Limpieza completada:\n${result.total_files_deleted} archivos eliminados\n${result.total_size_freed_mb} MB liberados`);
+                }
+              }} 
+            />
+          </div>
+        </div>
+        
         {/* Aquí se podrían añadir más herramientas en el futuro */}
       </div>
       <h2>Herramientas de la Biblioteca</h2>

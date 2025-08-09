@@ -14,8 +14,8 @@ import AdvancedSearchBar from './components/AdvancedSearchBar';
 import SearchFilters from './components/SearchFilters';
 import FilterChips from './components/FilterChips';
 import BookEditModal from './components/BookEditModal';
-import CleanupCoversButton from './components/CleanupCoversButton';
-import CleanupTempFilesButton from './components/CleanupTempFilesButton';
+
+import { getBackendUrl } from './config/api';
 import './LibraryView.css';
 
 
@@ -32,7 +32,7 @@ const getImageUrl = (imageSrc) => {
     // Formato: https://drive.google.com/file/d/{file_id}/view?usp=drivesdk
     if (imageSrc.includes('/file/d/')) {
       const fileId = imageSrc.split('/file/d/')[1].split('/')[0];
-      const backendUrl = `http://localhost:8001/api/drive/cover/${fileId}`;
+      const backendUrl = `${getBackendUrl()}/api/drive/cover/${fileId}`;
       return backendUrl;
     }
     
@@ -41,12 +41,12 @@ const getImageUrl = (imageSrc) => {
   
   // Si es una ruta local, construir la URL completa
   if (imageSrc.startsWith('/')) {
-    return `http://localhost:8001${imageSrc}`;
+    return `${getBackendUrl()}${imageSrc}`;
   }
   
   // Si es solo el nombre del archivo, construir la URL correcta
   // Las imágenes se guardan en static/covers/, pero se sirven desde /static/
-  return `http://localhost:8001/static/covers/${imageSrc}`;
+  return `${getBackendUrl()}/static/covers/${imageSrc}`;
 };
 
 // Componente para la portada con lazy loading
@@ -109,7 +109,7 @@ const LocationIndicator = ({ book }) => {
 
 // Modal de confirmación
 const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, bookTitle, isDeleting, isMultiple = false, selectedCount = 0 }) => {
-  console.log('🔍 DeleteConfirmationModal renderizado con props:', { isOpen, bookTitle, isMultiple, selectedCount });
+  
   if (!isOpen) return null;
 
   // Validar que selectedCount sea un número válido
@@ -158,7 +158,7 @@ function LibraryView() {
   });
   
   // Log del estado del modal para depuración
-  console.log('🔍 Estado actual del deleteModal:', deleteModal);
+      // Estado actual del deleteModal
   const [deletingBookId, setDeletingBookId] = useState(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedBooks, setSelectedBooks] = useState(new Set());
@@ -338,7 +338,7 @@ function LibraryView() {
   }, [searchTerm, filters, isAdvancedMode, withLoading, fetchBooks]);
 
   const handleDeleteClick = (bookId, bookTitle) => {
-    console.log('🔍 handleDeleteClick llamado con:', { bookId, bookTitle });
+    // handleDeleteClick llamado
     setDeleteModal({ 
       isOpen: true, 
       bookId, 
@@ -346,38 +346,38 @@ function LibraryView() {
       isMultiple: false, 
       selectedIds: [] 
     });
-    console.log('🔍 Modal configurado para abrirse');
+    // Modal configurado para abrirse
   };
 
   const handleDeleteConfirm = async () => {
-    console.log('🔍 handleDeleteConfirm llamado con deleteModal:', deleteModal);
+    // handleDeleteConfirm llamado
     const { bookId, isMultiple, selectedIds } = deleteModal;
     
     if (isMultiple) {
-      console.log('🔍 Ejecutando eliminación masiva');
+              // Ejecutando eliminación masiva
       await handleBulkDelete(selectedIds);
     } else {
-      console.log('🔍 Ejecutando eliminación individual para bookId:', bookId);
+              // Ejecutando eliminación individual
       await handleSingleDelete(bookId);
     }
   };
 
   const handleSingleDelete = async (bookId) => {
-    console.log('🔍 handleSingleDelete iniciado para bookId:', bookId);
+    // handleSingleDelete iniciado
     setDeletingBookId(bookId);
     
     try {
-      console.log('🔍 Llamando a deleteBook...');
+              // Llamando a deleteBook
       const response = await deleteBook(bookId);
-      console.log('🔍 Respuesta de deleteBook:', response);
+              // Respuesta de deleteBook recibida
       
       if (response.ok) {
-        console.log('🔍 Eliminación exitosa, recargando libros...');
+                  // Eliminación exitosa, recargando libros
         // Recargar la lista de libros para actualizar la UI
         await withLoading('initial', fetchBooks);
         resetModal();
       } else {
-        console.log('🔍 Error en respuesta:', response.status, response.statusText);
+                  // Error en respuesta del servidor
         const errorData = await response.json();
         alert(`Error al eliminar el libro: ${errorData.detail || 'Error desconocido'}`);
       }
@@ -391,12 +391,12 @@ function LibraryView() {
 
   const handleBulkDelete = async (bookIds) => {
     try {
-      console.log('🔍 handleBulkDelete iniciado para IDs:', bookIds);
+      // handleBulkDelete iniciado
       
       if (isDriveMode) {
         // En modo nube, usar el endpoint de eliminación masiva de Drive
-        console.log('🔍 Usando eliminación masiva de Drive');
-        const response = await fetch('http://localhost:8001/api/drive/books/bulk', {
+                  // Usando eliminación masiva de Drive
+        const response = await fetch(`${getBackendUrl()}/api/drive/books/bulk`, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
@@ -406,7 +406,7 @@ function LibraryView() {
         
         if (response.ok) {
           const result = await response.json();
-          console.log('🔍 Resultado de eliminación masiva:', result);
+          // Resultado de eliminación masiva recibido
           
           if (result.deleted_count > 0) {
             alert(`Se eliminaron ${result.deleted_count} libro${result.deleted_count > 1 ? 's' : ''} exitosamente.`);
@@ -421,7 +421,7 @@ function LibraryView() {
         }
       } else {
         // En modo local, usar eliminación individual
-        console.log('🔍 Usando eliminación individual para modo local');
+                  // Usando eliminación individual para modo local
         const deletePromises = bookIds.map(async (bookId) => {
           try {
             const response = await deleteBook(bookId);
@@ -545,12 +545,12 @@ function LibraryView() {
       // Verificar si el libro está en modo local o nube
       if (book.source === 'local' || (!book.synced_to_drive && !book.drive_file_id)) {
         // Libro local - abrir en nueva pestaña
-        const url = `http://localhost:8001/api/books/download/${book.id}`;
+        const url = `${getBackendUrl()}/api/books/download/${book.id}`;
         window.open(url, '_blank');
         return;
       } else if (book.source === 'drive' || book.synced_to_drive || book.drive_file_id) {
         // Libro en Google Drive - abrir en nueva pestaña
-        const url = `http://localhost:8001/api/drive/books/${book.id}/content`;
+        const url = `${getBackendUrl()}/api/drive/books/${book.id}/content`;
         window.open(url, '_blank');
         return;
       }
@@ -588,7 +588,7 @@ function LibraryView() {
     try {
       console.log('Buscando portada online para:', book.title);
       
-      const response = await fetch(`http://localhost:8001/api/books/${book.id}/search-cover-online`, {
+      const response = await fetch(`${getBackendUrl()}/api/books/${book.id}/search-cover-online`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -630,7 +630,7 @@ function LibraryView() {
       
       const bookIds = booksWithoutCovers.map(book => book.id);
       
-      const response = await fetch(`http://localhost:8001/api/books/bulk-search-covers`, {
+      const response = await fetch(`${getBackendUrl()}/api/books/bulk-search-covers`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -675,14 +675,6 @@ function LibraryView() {
         
         <div className="library-actions">
           <BulkSyncToDriveButton books={safeBooks} onSyncComplete={handleSyncComplete} />
-          <CleanupCoversButton onCleanupComplete={() => console.log('Portadas limpiadas')} />
-          <CleanupTempFilesButton onCleanupComplete={(result) => {
-            console.log('Archivos temporales limpiados:', result);
-            // Opcional: mostrar notificación más detallada
-            if (result.total_files_deleted > 0) {
-              alert(`Limpieza completada:\n${result.total_files_deleted} archivos eliminados\n${result.total_size_freed_mb} MB liberados`);
-            }
-          }} />
           <button 
             className="bulk-search-covers-btn"
             onClick={handleBulkSearchCovers}
@@ -802,8 +794,7 @@ function LibraryView() {
               )}
               <button 
                 onClick={() => {
-                  console.log('🔍 Botón eliminar clickeado para libro:', { id: book.id, title: book.title });
-                  console.log('🔍 Estados del botón:', { deletingBookId: deletingBookId, selectionMode: selectionMode });
+                        // Botón eliminar clickeado
                   handleDeleteClick(book.id, book.title);
                 }} 
                 className="delete-book-btn" 

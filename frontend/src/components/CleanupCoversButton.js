@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getBackendUrl } from '../config/api';
 import './CleanupCoversButton.css';
 
 const CleanupCoversButton = ({ onCleanupComplete }) => {
@@ -14,7 +15,7 @@ const CleanupCoversButton = ({ onCleanupComplete }) => {
     setMessage('');
 
     try {
-      const response = await fetch('http://localhost:8001/api/covers/cleanup', {
+      const response = await fetch(`${getBackendUrl()}/api/covers/cleanup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

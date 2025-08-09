@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { getBackendUrl, checkBackendHealth } from '../config/api';
 
 // Configuración de persistencia
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos en milisegundos
-const RETRY_DELAY = 2000; // 2 segundos
-const MAX_RETRIES = 3;
+const RETRY_DELAY = 5000; // 5 segundos
+const MAX_RETRIES = 2; // Reducir reintentos
 
 export const useDriveStatus = () => {
   const [driveStatus, setDriveStatus] = useState({
@@ -45,10 +46,16 @@ export const useDriveStatus = () => {
     setError('');
     
     try {
+      // Verificar primero si el backend está disponible
+      const backendAvailable = await checkBackendHealth();
+      if (!backendAvailable) {
+        throw new Error('Backend no disponible');
+      }
+
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos timeout
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos timeout
       
-      const response = await fetch('http://localhost:8001/api/drive/status', {
+      const response = await fetch(`${getBackendUrl()}/api/drive/status`, {
         signal: controller.signal
       });
       
@@ -78,8 +85,6 @@ export const useDriveStatus = () => {
       setError('');
       
     } catch (err) {
-      console.error('Error al verificar estado de Google Drive:', err);
-      
       // Manejar diferentes tipos de errores
       let errorMessage = 'Error de conexión al verificar Google Drive';
       let status = 'error';
@@ -87,7 +92,7 @@ export const useDriveStatus = () => {
       if (err.name === 'AbortError') {
         errorMessage = 'Timeout al verificar Google Drive';
         status = 'timeout';
-      } else if (err.message.includes('Failed to fetch')) {
+      } else if (err.message.includes('Failed to fetch') || err.message.includes('Backend no disponible')) {
         errorMessage = 'No se pudo conectar con el servidor';
         status = 'connection_error';
       }
@@ -101,10 +106,9 @@ export const useDriveStatus = () => {
         timestamp: Date.now()
       });
       
-      // Reintentar automáticamente si no es el último intento
-      if (retryCountRef.current < MAX_RETRIES) {
+      // Reintentar automáticamente solo si no es el último intento y no es un error de conexión
+      if (retryCountRef.current < MAX_RETRIES && status !== 'connection_error') {
         retryCountRef.current++;
-        console.log(`Reintentando verificación de Drive (${retryCountRef.current}/${MAX_RETRIES})...`);
         
         timeoutRef.current = setTimeout(() => {
           checkDriveStatus(forceRefresh);
@@ -122,7 +126,7 @@ export const useDriveStatus = () => {
 
   const clearDriveCache = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:8001/api/drive/clear-cache', {
+      const response = await fetch(`${getBackendUrl()}/api/drive/clear-cache`, {
         method: 'POST'
       });
       
@@ -141,7 +145,7 @@ export const useDriveStatus = () => {
 
   const getHealthStatus = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:8001/api/drive/health');
+      const response = await fetch(`${getBackendUrl()}/api/drive/health`);
       const data = await response.json();
       return data;
     } catch (err) {
@@ -161,12 +165,12 @@ export const useDriveStatus = () => {
     };
   }, [checkDriveStatus]);
 
-  // Verificación periódica cada 2 minutos si el estado es ok
+  // Verificación periódica cada 5 minutos si el estado es ok
   useEffect(() => {
     if (driveStatus.status === 'ok') {
       const intervalId = setInterval(() => {
         checkDriveStatus();
-      }, 2 * 60 * 1000); // 2 minutos
+      }, 5 * 60 * 1000); // 5 minutos
       
       return () => clearInterval(intervalId);
     }

@@ -1,14 +1,21 @@
 import { useCallback } from 'react';
 import { useAppMode } from '../contexts/AppModeContext';
+import { getBackendUrl, checkBackendHealth } from '../config/api';
 
-// URL base del backend
-const BACKEND_URL = 'http://localhost:8001';
+// URL base del backend (se actualiza automáticamente)
+const BACKEND_URL = getBackendUrl();
 
 export const useBookService = () => {
   const { appMode, isLocalMode, isDriveMode } = useAppMode();
 
   const getBooks = useCallback(async (category = null, search = null, page = 1, perPage = 20) => {
     try {
+      // Verificar primero si el backend está disponible
+      const backendAvailable = await checkBackendHealth();
+      if (!backendAvailable) {
+        throw new Error('Backend no disponible');
+      }
+
       if (isLocalMode) {
         let url = `${BACKEND_URL}/api/books/`;
         const params = new URLSearchParams();
@@ -41,7 +48,10 @@ export const useBookService = () => {
         return data;
       }
     } catch (error) {
-      console.error('❌ Error en getBooks:', error);
+      // Solo mostrar error en consola si no es un error de conexión
+      if (!error.message.includes('Backend no disponible') && !error.message.includes('Failed to fetch')) {
+        console.error('Error en getBooks:', error);
+      }
       throw error;
     }
   }, [isLocalMode, isDriveMode]);
@@ -154,6 +164,12 @@ export const useBookService = () => {
 
   const getCategories = useCallback(async () => {
     try {
+      // Verificar primero si el backend está disponible
+      const backendAvailable = await checkBackendHealth();
+      if (!backendAvailable) {
+        throw new Error('Backend no disponible');
+      }
+
       if (isLocalMode) {
         const response = await fetch(`${BACKEND_URL}/api/categories/`);
         if (!response.ok) {
@@ -168,7 +184,10 @@ export const useBookService = () => {
         return await response.json();
       }
     } catch (error) {
-      console.error('Error en getCategories:', error);
+      // Solo mostrar error en consola si no es un error de conexión
+      if (!error.message.includes('Backend no disponible') && !error.message.includes('Failed to fetch')) {
+        console.error('Error en getCategories:', error);
+      }
       throw error;
     }
   }, [isLocalMode, isDriveMode]);

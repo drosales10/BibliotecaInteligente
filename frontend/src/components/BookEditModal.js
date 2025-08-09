@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { getBackendUrl } from '../config/api';
 import './BookEditModal.css';
 
 const BookEditModal = ({ 
@@ -54,7 +55,7 @@ const BookEditModal = ({
     setMessage('');
 
     try {
-      const response = await fetch(`http://localhost:8001/api/books/${book.id}`, {
+      const response = await fetch(`${getBackendUrl()}/api/books/${book.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -96,7 +97,7 @@ const BookEditModal = ({
       const formData = new FormData();
       formData.append('cover_file', file);
 
-      const response = await fetch(`http://localhost:8001/api/books/${book.id}/update-cover`, {
+      const response = await fetch(`${getBackendUrl()}/api/books/${book.id}/update-cover`, {
         method: 'POST',
         body: formData
       });
@@ -136,7 +137,7 @@ const BookEditModal = ({
     setMessage('');
 
     try {
-      const response = await fetch('http://localhost:8001/api/categories/', {
+      const response = await fetch(`${getBackendUrl()}/api/categories/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -185,18 +186,18 @@ const BookEditModal = ({
       // Extraer el file_id de la URL de Google Drive
       if (imageSrc.includes('/file/d/')) {
         const fileId = imageSrc.split('/file/d/')[1].split('/')[0];
-        return `http://localhost:8001/api/drive/cover/${fileId}`;
+        return `${getBackendUrl()}/api/drive/cover/${fileId}`;
       }
       return imageSrc;
     }
     
     // Si es una ruta local, construir la URL completa
     if (imageSrc.startsWith('/')) {
-      return `http://localhost:8001${imageSrc}`;
+      return `${getBackendUrl()}${imageSrc}`;
     }
     
     // Si es solo el nombre del archivo, construir la URL correcta
-    return `http://localhost:8001/static/covers/${imageSrc}`;
+    return `${getBackendUrl()}/static/covers/${imageSrc}`;
   };
 
   const handleOpenBook = async () => {
@@ -204,11 +205,11 @@ const BookEditModal = ({
       // Verificar si el libro está en modo local o nube
       if (book.source === 'local' || (!book.synced_to_drive && !book.drive_file_id)) {
         // Libro local - abrir en nueva pestaña
-        const url = `http://localhost:8001/api/books/download/${book.id}`;
+        const url = `${getBackendUrl()}/api/books/download/${book.id}`;
         window.open(url, '_blank');
       } else if (book.source === 'drive' || book.synced_to_drive || book.drive_file_id) {
         // Libro en Google Drive - abrir en nueva pestaña
-        const url = `http://localhost:8001/api/drive/books/${book.id}/content`;
+        const url = `${getBackendUrl()}/api/drive/books/${book.id}/content`;
         window.open(url, '_blank');
       } else {
         setMessage('❌ No se puede determinar la ubicación del libro');

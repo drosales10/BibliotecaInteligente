@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppMode } from './contexts/AppModeContext';
+import { getBackendUrl } from './config/api';
 import './ReadView.css';
 
 const ReadView = () => {
@@ -21,12 +22,12 @@ const ReadView = () => {
         // Determinar el endpoint según el modo
         let endpoint;
         if (isLocalMode) {
-          endpoint = `http://localhost:8001/api/books/`;
+          endpoint = `${getBackendUrl()}/api/books/`;
         } else if (isDriveMode) {
-          endpoint = `http://localhost:8001/api/drive/books/`;
+          endpoint = `${getBackendUrl()}/api/drive/books/`;
         } else {
           // Si no está en ningún modo específico, intentar ambos
-          endpoint = `http://localhost:8001/api/books/`;
+          endpoint = `${getBackendUrl()}/api/books/`;
         }
 
         const response = await fetch(endpoint);
@@ -43,8 +44,8 @@ const ReadView = () => {
         if (!foundBook) {
           // Si no se encuentra en el primer endpoint, intentar el otro
           const altEndpoint = endpoint.includes('drive') 
-            ? `http://localhost:8001/api/books/`
-            : `http://localhost:8001/api/drive/books/`;
+            ? `${getBackendUrl()}/api/books/`
+            : `${getBackendUrl()}/api/drive/books/`;
           
           const altResponse = await fetch(altEndpoint);
           if (!altResponse.ok) {
@@ -66,16 +67,16 @@ const ReadView = () => {
           // Determinar la URL del archivo para el libro alternativo
           if (altFoundBook.file_path && isLocalMode) {
             // Libro local
-            setFileUrl(`http://localhost:8001/api/books/download/${altFoundBook.id}`);
+            setFileUrl(`${getBackendUrl()}/api/books/download/${altFoundBook.id}`);
           } else if (altFoundBook.drive_file_id && isDriveMode) {
             // Libro en Google Drive
-            setFileUrl(`http://localhost:8001/api/drive/books/${altFoundBook.id}/content`);
+            setFileUrl(`${getBackendUrl()}/api/drive/books/${altFoundBook.id}/content`);
           } else {
             // Intentar determinar automáticamente
             if (altFoundBook.file_path) {
-              setFileUrl(`http://localhost:8001/api/books/download/${altFoundBook.id}`);
+              setFileUrl(`${getBackendUrl()}/api/books/download/${altFoundBook.id}`);
             } else if (altFoundBook.drive_file_id) {
-              setFileUrl(`http://localhost:8001/api/drive/books/${altFoundBook.id}/content`);
+              setFileUrl(`${getBackendUrl()}/api/drive/books/${altFoundBook.id}/content`);
             } else {
               throw new Error('No se puede determinar la ubicación del archivo');
             }
@@ -86,16 +87,16 @@ const ReadView = () => {
           // Determinar la URL del archivo para el libro encontrado
           if (foundBook.file_path && isLocalMode) {
             // Libro local
-            setFileUrl(`http://localhost:8001/api/books/download/${foundBook.id}`);
-          } else if (foundBook.drive_file_id && isDriveMode) {
+            setFileUrl(`${getBackendUrl()}/api/books/download/${foundBook.id}`);
+            } else if (foundBook.drive_file_id && isDriveMode) {
             // Libro en Google Drive
-            setFileUrl(`http://localhost:8001/api/drive/books/${foundBook.id}/content`);
+            setFileUrl(`${getBackendUrl()}/api/drive/books/${foundBook.id}/content`);
           } else {
             // Intentar determinar automáticamente
             if (foundBook.file_path) {
-              setFileUrl(`http://localhost:8001/api/books/download/${foundBook.id}`);
+              setFileUrl(`${getBackendUrl()}/api/books/download/${foundBook.id}`);
             } else if (foundBook.drive_file_id) {
-              setFileUrl(`http://localhost:8001/api/drive/books/${foundBook.id}/content`);
+              setFileUrl(`${getBackendUrl()}/api/drive/books/${foundBook.id}/content`);
             } else {
               throw new Error('No se puede determinar la ubicación del archivo');
             }

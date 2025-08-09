@@ -4,33 +4,57 @@
 
 El proyecto incluye varios scripts de inicio para facilitar el desarrollo y despliegue de la aplicación. Estos scripts automatizan tareas comunes y aseguran que el entorno esté configurado correctamente.
 
+## 🔧 Variables de Entorno
+
+### Configuración Automática
+
+Todos los scripts cargan automáticamente las variables de entorno desde el archivo `.env` en la raíz del proyecto.
+
+#### Variables Disponibles
+
+| Variable | Descripción | Valor por Defecto | Ejemplo |
+|----------|-------------|-------------------|---------|
+| `HOST` | Host del servidor backend | `localhost` | `0.0.0.0` |
+| `PORT` | Puerto del servidor backend | `8001` | `8001` |
+| `FRONTEND_PORT` | Puerto del servidor frontend | `3000` | `3000` |
+| `LOG_LEVEL` | Nivel de logging | `info` | `debug`, `info`, `warning`, `error` |
+| `RELOAD` | Habilitar reload automático | `true` | `false` |
+| `GEMINI_API_KEY` | Clave de API de Gemini | - | `"tu_clave_aqui"` |
+
+#### Archivo .env de Ejemplo
+
+```env
+# Configuración de la API de Gemini
+GEMINI_API_KEY="TU_API_KEY_DE_GEMINI_AQUI"
+
+# Configuración del servidor para producción
+HOST="0.0.0.0"
+PORT=8001
+
+# Configuración del frontend (opcional)
+FRONTEND_PORT=3000
+
+# Configuración de logging (opcional)
+LOG_LEVEL="info"
+
+# Configuración de reload (opcional, solo para desarrollo)
+RELOAD="false"
+```
+
 ## 🔧 Scripts Disponibles
 
-### 1. `start.bat` - Script Principal
+### 1. `start.bat` - Script Principal (Desarrollo)
 
 **Ubicación**: Raíz del proyecto  
-**Propósito**: Inicia tanto el backend como el frontend automáticamente
+**Propósito**: Inicia tanto el backend como el frontend automáticamente para desarrollo
 
-#### Contenido del Script
-```batch
-@echo off
-echo ========================================
-echo   Iniciando Servidores de la Libreria
-echo ========================================
-
-REM Iniciar el servidor del Backend en una nueva ventana
-echo Iniciando Backend en http://localhost:8001 ...
-START "Backend" cmd /c "cd backend && "C:\Users\Javier Rosales\miniconda3\python.exe" -m uvicorn main:app --reload --port 8001"
-
-REM Iniciar el servidor del Frontend en una nueva ventana
-echo Iniciando Frontend en http://localhost:3000 ...
-START "Frontend" cmd /c "cd frontend && npm start"
-
-echo.
-echo Servidores iniciados en segundo plano.
-echo Puedes cerrar esta ventana.
-timeout /t 5 >nul
-```
+#### Características
+- ✅ Carga variables de entorno desde `.env`
+- ✅ Inicia backend y frontend simultáneamente
+- ✅ Abre ventanas separadas para cada servidor
+- ✅ Usa `localhost` como host por defecto
+- ✅ Habilita reload automático
+- ✅ Mensajes informativos del progreso
 
 #### Uso
 ```bash
@@ -38,50 +62,37 @@ timeout /t 5 >nul
 .\start.bat
 ```
 
-#### Características
-- ✅ Inicia backend y frontend simultáneamente
-- ✅ Abre ventanas separadas para cada servidor
-- ✅ Usa Python de Miniconda automáticamente
-- ✅ Mensajes informativos del progreso
+### 2. `start_production.bat` - Script de Producción
 
-### 2. `start_backend.bat` - Script del Backend
+**Ubicación**: Raíz del proyecto  
+**Propósito**: Inicia la aplicación en modo producción
+
+#### Características
+- ✅ Carga variables de entorno desde `.env`
+- ✅ Usa `0.0.0.0` como host por defecto (accesible desde cualquier IP)
+- ✅ Ejecuta migraciones de la base de datos
+- ✅ Inicia el backend sin reload automático
+- ✅ Muestra la configuración utilizada
+- ✅ Configuración optimizada para producción
+
+#### Uso
+```bash
+# Desde la raíz del proyecto
+.\start_production.bat
+```
+
+### 3. `start_backend.bat` - Script del Backend
 
 **Ubicación**: `backend/`  
 **Propósito**: Inicia solo el servidor backend con configuración completa
 
-#### Contenido del Script
-```batch
-@echo off
-echo Iniciando el backend de la Libreria Inteligente...
-echo.
-
-REM Configurar el Python de Miniconda
-set PYTHON_PATH=C:\Users\Javier Rosales\miniconda3\python.exe
-
-REM Verificar que Python existe
-if not exist "%PYTHON_PATH%" (
-    echo Error: No se encontró Python en %PYTHON_PATH%
-    echo Por favor, verifica que Miniconda esté instalado correctamente.
-    pause
-    exit /b 1
-)
-
-echo Usando Python: %PYTHON_PATH%
-echo.
-
-REM Ejecutar las migraciones de la base de datos
-echo Ejecutando migraciones de la base de datos...
-"%PYTHON_PATH%" -m alembic upgrade head
-
-REM Iniciar el servidor
-echo.
-echo Iniciando el servidor backend en http://localhost:8001
-echo Presiona Ctrl+C para detener el servidor
-echo.
-"%PYTHON_PATH%" -m uvicorn main:app --reload --port 8001
-
-pause
-```
+#### Características
+- ✅ Carga variables de entorno desde `.env`
+- ✅ Verifica la existencia de Python
+- ✅ Ejecuta migraciones automáticamente
+- ✅ Usa Python de Miniconda específicamente
+- ✅ Manejo de errores con mensajes claros
+- ✅ Pausa al final para ver logs
 
 #### Uso
 ```bash
@@ -89,14 +100,25 @@ pause
 .\start_backend.bat
 ```
 
-#### Características
-- ✅ Verifica la existencia de Python
-- ✅ Ejecuta migraciones automáticamente
-- ✅ Usa Python de Miniconda específicamente
-- ✅ Manejo de errores con mensajes claros
-- ✅ Pausa al final para ver logs
+### 4. `check_config.bat` - Verificador de Configuración
 
-### 3. `stop.bat` - Script de Parada
+**Ubicación**: Raíz del proyecto  
+**Propósito**: Verifica la configuración de variables de entorno
+
+#### Características
+- ✅ Verifica si existe el archivo `.env`
+- ✅ Crea archivo `.env` desde `env.example` si no existe
+- ✅ Muestra la configuración actual
+- ✅ Calcula URLs de acceso
+- ✅ Valida configuración requerida
+
+#### Uso
+```bash
+# Desde la raíz del proyecto
+.\check_config.bat
+```
+
+### 5. `stop.bat` - Script de Parada
 
 **Ubicación**: Raíz del proyecto  
 **Propósito**: Detiene todos los procesos del proyecto

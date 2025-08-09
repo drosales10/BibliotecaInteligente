@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import './CategoriesView.css';
+import { getBackendUrl } from './config/api';
 
 function CategoriesView() {
   const [categories, setCategories] = useState([]);
@@ -10,7 +11,7 @@ function CategoriesView() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await fetch('http://localhost:8001/api/categories/');
+        const response = await fetch(`${getBackendUrl()}/api/categories/`);
         if (response.ok) {
           const data = await response.json();
           setCategories(data);

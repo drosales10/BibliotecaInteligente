@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useDriveStatus } from './hooks/useDriveStatus';
 import { useBookService } from './hooks/useBookService';
 import { useAppMode } from './contexts/AppModeContext';
+import { getBackendUrl } from './config/api';
 import './UploadView.css';
 
 function UploadView() {
@@ -174,15 +175,15 @@ function UploadView() {
     try {
       // Determinar el endpoint según el modo de la aplicación
       const endpoint = appMode === 'local' 
-        ? 'http://localhost:8001/api/upload-bulk-local/'
-        : 'http://localhost:8001/upload-bulk/';
+        ? `${getBackendUrl()}/api/upload-bulk-local/`
+        : `${getBackendUrl()}/upload-bulk/`;
       
       setProgress({ current: 0, total: 0, message: `Procesando en modo ${appMode === 'local' ? 'local' : 'nube'}...` });
       
       // Verificar primero si el backend está disponible
       setProgress({ current: 0, total: 0, message: 'Verificando conexión con el servidor...' });
       
-      const healthCheck = await fetch('http://localhost:8001/api/drive/status', {
+      const healthCheck = await fetch(`${getBackendUrl()}/api/drive/status`, {
         method: 'GET',
         headers: { 'Origin': 'http://localhost:3000' },
         signal: AbortSignal.timeout(10000) // 10 segundos timeout
@@ -270,7 +271,7 @@ function UploadView() {
       if (error.name === 'AbortError' || error.name === 'TimeoutError') {
         setMessage('Error: La operación tardó demasiado tiempo. El archivo ZIP puede ser muy grande o el servidor está ocupado. Intenta con un archivo más pequeño.');
       } else if (error.message.includes('Failed to fetch')) {
-        setMessage('Error de conexión: No se pudo conectar con el backend. Verifica que el servidor esté ejecutándose en http://localhost:8001');
+        setMessage('Error de conexión: No se pudo conectar con el backend. Verifica que el servidor esté ejecutándose correctamente.');
       } else if (error.message.includes('Google Drive no está configurado') && appMode !== 'local') {
         setMessage('Error: Google Drive no está configurado correctamente. Verifica que el archivo credentials.json esté presente y configurado.');
       } else {
@@ -375,7 +376,7 @@ function UploadView() {
         setProgress({ current: 0, total: files.length, message: 'Enviando archivos al servidor...' });
         
         try {
-          const response = await fetch('http://localhost:8001/api/upload-folder-cloud/', {
+          const response = await fetch(`${getBackendUrl()}/api/upload-folder-cloud/`, {
             method: 'POST',
             body: formData
           });
@@ -441,7 +442,7 @@ function UploadView() {
       // Verificar conexión con el backend
       setProgress({ current: 0, total: 0, message: 'Verificando conexión con el servidor...' });
       
-      const healthCheck = await fetch('http://localhost:8001/api/drive/status', {
+      const healthCheck = await fetch(`${getBackendUrl()}/api/drive/status`, {
         method: 'GET',
         headers: { 'Origin': 'http://localhost:3000' },
         signal: AbortSignal.timeout(10000)
@@ -457,7 +458,7 @@ function UploadView() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 900000); // 15 minutos de timeout
 
-      const response = await fetch('http://localhost:8001/api/upload-drive-folder/', {
+      const response = await fetch(`${getBackendUrl()}/api/upload-drive-folder/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -519,7 +520,7 @@ function UploadView() {
       if (error.name === 'AbortError' || error.name === 'TimeoutError') {
         setMessage('Error: La operación tardó demasiado tiempo. La carpeta puede ser muy grande o el servidor está ocupado.');
       } else if (error.message.includes('Failed to fetch')) {
-        setMessage('Error de conexión: No se pudo conectar con el backend. Verifica que el servidor esté ejecutándose en http://localhost:8001');
+        setMessage('Error de conexión: No se pudo conectar con el backend. Verifica que el servidor esté ejecutándose correctamente.');
       } else if (error.message.includes('Google Drive no está configurado')) {
         setMessage('Error: Google Drive no está configurado correctamente. Verifica que el archivo credentials.json esté presente y configurado.');
       } else {

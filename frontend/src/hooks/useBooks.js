@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getBackendUrl } from '../config/api';
 
 export const useBooks = (searchParams, debouncedSearchTerm) => {
   const [books, setBooks] = useState([]);
@@ -19,7 +20,7 @@ export const useBooks = (searchParams, debouncedSearchTerm) => {
       params.append('search', debouncedSearchTerm);
     }
 
-    const url = `http://localhost:8001/books/?${params.toString()}`;
+    const url = `${getBackendUrl()}/books/?${params.toString()}`;
     
     try {
       const response = await fetch(url);

@@ -144,12 +144,74 @@ cd ..
 
 ### 4. Configurar las Variables de Entorno
 
-En la raíz del proyecto, crea un archivo llamado `.env` y añade tu clave de API de Gemini:
+En la raíz del proyecto, crea un archivo llamado `.env` y añade tu configuración:
 
 **.env**
-```
+```env
+# Configuración de la API de Gemini
 GEMINI_API_KEY="TU_API_KEY_DE_GEMINI_AQUI"
+
+# Configuración del servidor para producción
+HOST="localhost"
+PORT=8001
+
+# Configuración del frontend (opcional)
+FRONTEND_PORT=3000
+
+# Configuración de logging (opcional)
+LOG_LEVEL="info"
 ```
+
+#### Variables de Entorno Disponibles
+
+| Variable | Descripción | Valor por Defecto | Ejemplo |
+|----------|-------------|-------------------|---------|
+| `HOST` | Host del servidor backend | `localhost` | `0.0.0.0` |
+| `PORT` | Puerto del servidor backend | `8001` | `8001` |
+| `FRONTEND_PORT` | Puerto del servidor frontend | `3000` | `3000` |
+| `LOG_LEVEL` | Nivel de logging | `info` | `debug`, `info`, `warning`, `error` |
+| `RELOAD` | Habilitar reload automático | `true` | `false` |
+| `GEMINI_API_KEY` | Clave de API de Gemini | - | `"tu_clave_aqui"` |
+
+#### Configuración para Producción
+
+Para permitir acceso desde otras máquinas en la red:
+
+```env
+HOST=0.0.0.0
+PORT=8001
+LOG_LEVEL=info
+RELOAD=false
+```
+
+Para desarrollo local:
+
+```env
+HOST=localhost
+PORT=8001
+LOG_LEVEL=debug
+RELOAD=true
+```
+
+#### ⚠️ Importante: Formato de Variables
+
+**✅ Formato correcto (sin comillas innecesarias):**
+```env
+HOST=0.0.0.0
+PORT=8001
+LOG_LEVEL=info
+GEMINI_API_KEY=tu_clave_aqui
+```
+
+**❌ Formato incorrecto (con comillas innecesarias):**
+```env
+HOST="0.0.0.0"
+PORT="8001"
+LOG_LEVEL="info"
+GEMINI_API_KEY="tu_clave_aqui"
+```
+
+**💡 Nota:** Solo usa comillas si el valor contiene espacios o caracteres especiales.
 
 ### 5. Configurar Google Drive (Opcional pero Recomendado)
 
@@ -165,15 +227,41 @@ Para usar el almacenamiento en la nube:
 
 ### 6. ¡Ejecutar la Aplicación!
 
+#### Desarrollo Local
+
 ```bash
-# Ejecutar todo con un solo comando
+# Ejecutar todo con un solo comando (desarrollo)
 start.bat
 ```
 
 Este script:
-- Activa automáticamente el entorno virtual
-- Inicia el servidor backend en http://localhost:8001
-- Inicia el servidor frontend en http://localhost:3000
+- ✅ Activa automáticamente el entorno virtual
+- ✅ Carga las variables de entorno desde `.env`
+- ✅ Inicia el servidor backend en http://localhost:8001
+- ✅ Inicia el servidor frontend en http://localhost:3000
+- ✅ Habilita reload automático
+
+#### Producción
+
+```bash
+# Ejecutar en modo producción
+start_production.bat
+```
+
+Este script:
+- ✅ Activa automáticamente el entorno virtual
+- ✅ Carga las variables de entorno desde `.env`
+- ✅ Usa `0.0.0.0` como host por defecto (accesible desde cualquier IP)
+- ✅ Ejecuta migraciones de la base de datos
+- ✅ Inicia el backend sin reload automático
+- ✅ Muestra la configuración utilizada
+
+#### Solo Backend
+
+```bash
+# Ejecutar solo el backend
+backend/start_backend.bat
+```
 
 ¡Abre tu navegador en `http://localhost:3000` y empieza a construir tu biblioteca inteligente!
 

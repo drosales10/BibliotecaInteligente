@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { useAppMode } from '../contexts/AppModeContext';
+import { getBackendUrl } from '../config/api';
 import './BulkSyncToDriveButton.css';
-
-// URL base del backend
-const BACKEND_URL = 'http://localhost:8001';
 
 const BulkSyncToDriveButton = ({ books, onSyncComplete }) => {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -38,7 +36,7 @@ const BulkSyncToDriveButton = ({ books, onSyncComplete }) => {
 
       // Sincronizar todos los libros en paralelo
       const syncPromises = syncableBooks.map(book => 
-        fetch(`${BACKEND_URL}/api/drive/sync-book`, {
+        fetch(`${getBackendUrl()}/api/drive/sync-book`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
