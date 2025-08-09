@@ -12,7 +12,6 @@ export const useAppMode = () => {
 
 export const AppModeProvider = ({ children }) => {
   const [appMode, setAppMode] = useState('local');
-  const [isLoading, setIsLoading] = useState(false); // Cambiar a false por defecto
 
   useEffect(() => {
     try {
@@ -36,7 +35,6 @@ export const AppModeProvider = ({ children }) => {
   const value = {
     appMode,
     changeAppMode,
-    isLoading,
     isLocalMode: appMode === 'local',
     isDriveMode: appMode === 'drive'
   };

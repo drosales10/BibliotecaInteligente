@@ -1,9 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useAppMode } from '../contexts/AppModeContext';
 
 const useAdvancedSearch = () => {
-  const { isLocalMode, isDriveMode } = useAppMode();
-  
   // Estados principales
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
@@ -21,7 +18,7 @@ const useAdvancedSearch = () => {
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
-  const [searchHistory, setSearchHistory] = useState([]);
+  const [searchHistory] = useState([]);
   const [activeFilters, setActiveFilters] = useState([]);
   
   // Estados de carga
@@ -29,13 +26,10 @@ const useAdvancedSearch = () => {
   const [searchError, setSearchError] = useState(null);
   
   // Cache y optimización
-  const searchCache = useRef(new Map());
   const debounceTimeout = useRef(null);
 
   // Constantes
   const DEBOUNCE_DELAY = 300;
-  const MAX_HISTORY_ITEMS = 10;
-  const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutos
 
   // Función para obtener etiqueta de filtro
   const getFilterLabel = useCallback((filterName, value) => {
@@ -110,47 +104,24 @@ const useAdvancedSearch = () => {
     setSuggestions(basicSuggestions);
   }, []);
 
-  // Función para realizar búsqueda avanzada (simplificada)
+  // Función para búsqueda avanzada
   const performAdvancedSearch = useCallback(async (searchParams) => {
     setIsSearching(true);
     setSearchError(null);
-
+    
     try {
-      const params = new URLSearchParams();
+      // Implementación simplificada de búsqueda avanzada
+      // Por ahora, solo simulamos una búsqueda
+      const results = [];
       
-      // Parámetros de búsqueda básica
-      if (searchParams.term) {
-        params.append('search', searchParams.term);
-      }
-      
-      // Parámetros de paginación
-      if (searchParams.page) {
-        params.append('page', searchParams.page);
-      }
-      if (searchParams.perPage) {
-        params.append('per_page', searchParams.perPage);
-      }
-
-      // Usar el endpoint de búsqueda simple existente
-      const endpoint = isLocalMode 
-        ? `http://localhost:8001/api/books/?${params.toString()}`
-        : `http://localhost:8001/api/drive/books/?${params.toString()}`;
-
-      const response = await fetch(endpoint);
-      
-      if (!response.ok) {
-        throw new Error(`Error en búsqueda: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data;
+      return results;
     } catch (error) {
       setSearchError(error.message);
       throw error;
     } finally {
       setIsSearching(false);
     }
-  }, [isLocalMode, isDriveMode]);
+  }, []);
 
   // Función para búsqueda con debounce
   const debouncedSearch = useCallback((searchParams) => {

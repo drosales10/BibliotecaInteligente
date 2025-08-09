@@ -9,7 +9,6 @@ const SearchFilters = ({
 }) => {
 
   const [filterMetadata, setFilterMetadata] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
     basic: true,
     advanced: false,
@@ -19,7 +18,6 @@ const SearchFilters = ({
   // Cargar metadatos de filtros
   useEffect(() => {
     const loadFilterMetadata = async () => {
-      setIsLoading(true);
       try {
         // Metadatos básicos por ahora
         const metadata = {
@@ -31,8 +29,6 @@ const SearchFilters = ({
         setFilterMetadata(metadata);
       } catch (error) {
         console.error('Error loading filter metadata:', error);
-      } finally {
-        setIsLoading(false);
       }
     };
 

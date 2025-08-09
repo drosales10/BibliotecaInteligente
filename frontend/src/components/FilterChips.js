@@ -92,31 +92,6 @@ const FilterChips = ({
     return colors[filterName] || 'var(--primary-color)';
   };
 
-  // Función para formatear el valor del filtro
-  const formatFilterValue = (filterName, value) => {
-    if (filterName === 'hasCover' || filterName === 'hasFile') {
-      return value ? 'Sí' : 'No';
-    }
-    
-    if (filterName === 'dateFrom' || filterName === 'dateTo') {
-      return new Date(value).toLocaleDateString('es-ES');
-    }
-    
-    if (filterName === 'source') {
-      const sourceLabels = {
-        local: 'Local',
-        drive: 'Google Drive'
-      };
-      return sourceLabels[value] || value;
-    }
-    
-    if (filterName === 'fileType') {
-      return value.toUpperCase();
-    }
-    
-    return value;
-  };
-
   if (!activeFilters || activeFilters.length === 0) {
     return null;
   }

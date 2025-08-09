@@ -148,7 +148,7 @@ const BookEditModal = ({
         throw new Error('Error al crear la categoría');
       }
 
-      const result = await response.json();
+      await response.json();
       
       // Notificar al componente padre sobre la nueva categoría
       onCategoryCreate(newCategory.trim());

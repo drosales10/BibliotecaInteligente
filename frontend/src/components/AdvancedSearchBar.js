@@ -14,7 +14,6 @@ const AdvancedSearchBar = ({
   className = "" 
 }) => {
 
-  const [isFocused, setIsFocused] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
@@ -40,7 +39,6 @@ const AdvancedSearchBar = ({
 
   // Función para manejar el foco
   const handleFocus = () => {
-    setIsFocused(true);
     if (searchTerm.trim().length >= 2) {
       setShowSuggestions(true);
     } else if (searchHistory && searchHistory.length > 0) {
@@ -50,7 +48,6 @@ const AdvancedSearchBar = ({
 
   // Función para manejar la pérdida de foco
   const handleBlur = () => {
-    setIsFocused(false);
     // Delay para permitir clicks en sugerencias
     setTimeout(() => {
       setShowSuggestions(false);

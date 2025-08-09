@@ -5,13 +5,11 @@ import { useAppMode } from './contexts/AppModeContext';
 import { usePagination } from './hooks/usePagination';
 import useLoadingState from './hooks/useLoadingState';
 import useAdvancedSearch from './hooks/useAdvancedSearch';
-import SyncToDriveButton from './components/SyncToDriveButton';
 import BulkSyncToDriveButton from './components/BulkSyncToDriveButton';
 import PaginationControls from './components/PaginationControls';
 import LazyImage from './components/LazyImage';
-import BookCardSkeleton, { BookCardSkeletonGrid } from './components/BookCardSkeleton';
-import LoadingSpinner, { LoadingOverlay, LoadingInline } from './components/LoadingSpinner';
-import ProgressIndicator, { IndeterminateProgress } from './components/ProgressIndicator';
+import LoadingSpinner from './components/LoadingSpinner';
+import { IndeterminateProgress } from './components/ProgressIndicator';
 import AdvancedSearchBar from './components/AdvancedSearchBar';
 import SearchFilters from './components/SearchFilters';
 import FilterChips from './components/FilterChips';
@@ -185,7 +183,6 @@ function LibraryView() {
     searchHistory,
     isAdvancedMode,
     isLoading: searchLoading,
-    performSearch,
     updateSearchTerm,
     updateFilters,
     clearSearch,
@@ -210,10 +207,7 @@ function LibraryView() {
 
   // Hook de estados de carga mejorados
   const {
-    loadingStates,
     isLoading,
-    startLoading,
-    stopLoading,
     withLoading
   } = useLoadingState({
     initial: true,
@@ -300,7 +294,7 @@ function LibraryView() {
       setError(err.message);
       console.error('Error al cargar libros:', err);
     }
-  }, [getBooks, searchParams, searchTerm, filters, isAdvancedMode, isLocalMode, isDriveMode, appMode, currentPage, perPage, updatePaginationInfo, resetPagination]);
+  }, [getBooks, searchParams, searchTerm, currentPage, perPage, isLocalMode, isDriveMode, updatePaginationInfo, resetPagination]);
 
   // Función para actualizar libros manualmente
   const refreshBooks = useCallback(() => {
@@ -315,7 +309,7 @@ function LibraryView() {
   // Efecto para recargar libros cuando cambia el modo de aplicación
   useEffect(() => {
     withLoading('initial', fetchBooks);
-  }, [appMode, isLocalMode, isDriveMode, withLoading]);
+  }, [appMode, isLocalMode, isDriveMode, withLoading, fetchBooks]);
 
   // Efecto para actualizar libros cuando cambia la ubicación (después de añadir un libro)
   useEffect(() => {
@@ -334,7 +328,7 @@ function LibraryView() {
   // Efecto para recargar libros cuando cambia la paginación
   useEffect(() => {
     withLoading('pagination', fetchBooks);
-  }, [currentPage, perPage, withLoading]);
+  }, [currentPage, perPage, withLoading, fetchBooks]);
 
   // Efecto para búsqueda avanzada
   useEffect(() => {
@@ -755,7 +749,12 @@ function LibraryView() {
       {/* Estados de carga mejorados */}
       {isLoading('initial') && (
         <div className="loading-container">
-          <BookCardSkeletonGrid count={6} variant="default" />
+          <LoadingSpinner 
+            size="medium" 
+            variant="dots" 
+            text="Cargando libros..." 
+            color="primary"
+          />
         </div>
       )}
       
