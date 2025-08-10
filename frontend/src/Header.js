@@ -107,6 +107,13 @@ function Header() {
         >
           Herramientas
         </NavLink>
+        <NavLink 
+          to="/rag" 
+          className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
+          onClick={closeMobileMenu}
+        >
+          IA Chat
+        </NavLink>
       </nav>
 
       {/* Overlay para cerrar menú móvil */}

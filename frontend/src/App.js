@@ -8,6 +8,7 @@ import UploadView from './UploadView';
 import CategoriesView from './CategoriesView';
 import ToolsView from './ToolsView';
 import ReadView from './ReadView';
+import RagView from './RagView';
 import TestComponent from './TestComponent';
 import BackendStatusIndicator from './components/BackendStatusIndicator';
 import './App.css';
@@ -26,6 +27,7 @@ function App() {
                 <Route path="/categories" element={<CategoriesView />} />
                 <Route path="/tools" element={<ToolsView />} />
                 <Route path="/leer/:id" element={<ReadView />} />
+                <Route path="/rag" element={<RagView />} />
                 <Route path="/test" element={<TestComponent />} />
               </Routes>
             </main>

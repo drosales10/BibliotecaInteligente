@@ -3966,6 +3966,41 @@ async def upload_folder_books_cloud(
             except OSError:
                 pass  # Ignorar errores de limpieza
 
+# Endpoints RAG para conversación con libros
+@app.post("/rag/upload-book/", response_model=schemas.RagUploadResponse)
+async def upload_book_for_rag(file: UploadFile = File(...)):
+    """Sube un libro para procesamiento RAG y conversación con IA."""
+    import uuid
+    
+    book_id = str(uuid.uuid4())
+    file_location = os.path.join(STATIC_TEMP_DIR, f"{book_id}_{file.filename}")
+    
+    try:
+        # Guardar archivo temporal
+        with open(file_location, "wb") as f:
+            f.write(await file.read())
+        
+        # Procesar libro para RAG
+        import rag
+        await rag.process_book_for_rag(file_location, book_id)
+        
+        return {"book_id": book_id, "message": "Libro procesado para RAG exitosamente."}
+    except Exception as e:
+        # Limpiar archivo temporal en caso de error
+        if os.path.exists(file_location):
+            os.remove(file_location)
+        raise HTTPException(status_code=500, detail=f"Error al procesar el libro para RAG: {e}")
+
+@app.post("/rag/query/", response_model=schemas.RagQueryResponse)
+async def query_rag_endpoint(query_data: schemas.RagQuery):
+    """Consulta la IA sobre el contenido de un libro procesado."""
+    try:
+        import rag
+        response_text = await rag.query_rag(query_data.query, query_data.book_id)
+        return {"response": response_text}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al consultar RAG: {e}")
+
 if __name__ == "__main__":
     import uvicorn
     

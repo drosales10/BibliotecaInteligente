@@ -73,3 +73,15 @@ class PaginationInfo(BaseModel):
 class PaginatedResponse(BaseModel, Generic[T]):
     items: List[T]
     pagination: PaginationInfo
+
+# Esquemas RAG
+class RagUploadResponse(BaseModel):
+    book_id: str
+    message: str
+
+class RagQuery(BaseModel):
+    query: str
+    book_id: str
+
+class RagQueryResponse(BaseModel):
+    response: str
