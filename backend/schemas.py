@@ -17,6 +17,12 @@ class Book(BookBase):
     drive_web_link: Optional[str] = None
     drive_letter_folder: Optional[str] = None
     drive_filename: Optional[str] = None
+    
+    # Campos para RAG (Retrieval-Augmented Generation)
+    rag_processed: Optional[bool] = False
+    rag_book_id: Optional[str] = None
+    rag_chunks_count: Optional[int] = None
+    rag_processed_date: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -78,6 +84,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
 class RagUploadResponse(BaseModel):
     book_id: str
     message: str
+    status: Optional[str] = None  # "already_exists", "processed_existing", "new_book_added"
 
 class RagQuery(BaseModel):
     query: str
@@ -85,3 +92,22 @@ class RagQuery(BaseModel):
 
 class RagQueryResponse(BaseModel):
     response: str
+
+# Nuevos esquemas para integración RAG-Biblioteca
+class RagProcessBookRequest(BaseModel):
+    book_id: int  # ID del libro en la base de datos principal
+
+class RagProcessBookResponse(BaseModel):
+    success: bool
+    message: str
+    rag_book_id: Optional[str] = None
+    chunks_processed: Optional[int] = None
+    book_already_in_rag: Optional[bool] = False
+
+class BookRagStatus(BaseModel):
+    book_id: int
+    rag_processed: bool
+    rag_book_id: Optional[str] = None
+    rag_chunks_count: Optional[int] = None
+    rag_processed_date: Optional[str] = None
+    can_process_rag: bool  # Si el libro está disponible para procesar con RAG

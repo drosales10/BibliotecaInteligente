@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, or_
+from sqlalchemy import desc, or_, and_, func
 import models
 import os
 import logging
@@ -573,3 +573,155 @@ def get_drive_categories(db: Session) -> list[str]:
             .distinct()
             .order_by(models.Book.category)
             .all()]
+
+# ============================================================================
+# FUNCIONES CRUD PARA RAG (Retrieval-Augmented Generation)
+# ============================================================================
+
+def get_book_rag_status(db: Session, book_id: int):
+    """Obtiene el estado RAG de un libro específico"""
+    book = db.query(models.Book).filter(models.Book.id == book_id).first()
+    if not book:
+        return None
+    
+    return {
+        "book_id": book.id,
+        "rag_processed": book.rag_processed or False,
+        "rag_book_id": book.rag_book_id,
+        "rag_chunks_count": book.rag_chunks_count,
+        "rag_processed_date": book.rag_processed_date.isoformat() if book.rag_processed_date else None,
+        "can_process_rag": can_book_be_processed_for_rag(book)
+    }
+
+def can_book_be_processed_for_rag(book: models.Book) -> bool:
+    """Verifica si un libro puede ser procesado para RAG"""
+    if not book:
+        return False
+    
+    # Verificar si tiene archivo local disponible
+    has_local_file = book.file_path and os.path.exists(book.file_path)
+    
+    # Verificar si tiene archivo en Google Drive
+    has_drive_file = book.drive_file_id is not None and book.drive_filename is not None
+    
+    # Verificar que sea un formato compatible (PDF o EPUB)
+    if has_local_file:
+        file_extension = Path(book.file_path).suffix.lower()
+        return file_extension in ['.pdf', '.epub']
+    elif has_drive_file:
+        file_extension = Path(book.drive_filename).suffix.lower()
+        return file_extension in ['.pdf', '.epub']
+    
+    return False
+
+def get_book_by_rag_id(db: Session, rag_book_id: str):
+    """Busca un libro por su ID de RAG"""
+    return db.query(models.Book).filter(models.Book.rag_book_id == rag_book_id).first()
+
+def update_book_rag_status(db: Session, book_id: int, rag_book_id: str, chunks_count: int):
+    """Actualiza el estado RAG de un libro después del procesamiento"""
+    from sqlalchemy import func
+    
+    book = db.query(models.Book).filter(models.Book.id == book_id).first()
+    if not book:
+        return None
+    
+    book.rag_processed = True
+    book.rag_book_id = rag_book_id
+    book.rag_chunks_count = chunks_count
+    book.rag_processed_date = func.now()
+    
+    db.commit()
+    db.refresh(book)
+    return book
+
+def clear_book_rag_status(db: Session, book_id: int):
+    """Limpia el estado RAG de un libro (útil para reprocesamiento)"""
+    book = db.query(models.Book).filter(models.Book.id == book_id).first()
+    if not book:
+        return None
+    
+    book.rag_processed = False
+    book.rag_book_id = None
+    book.rag_chunks_count = None
+    book.rag_processed_date = None
+    
+    db.commit()
+    db.refresh(book)
+    return book
+
+def get_books_by_rag_status(db: Session, rag_processed: bool = None, skip: int = 0, limit: int = 100):
+    """Obtiene libros filtrados por estado RAG"""
+    query = db.query(models.Book)
+    
+    if rag_processed is not None:
+        query = query.filter(models.Book.rag_processed == rag_processed)
+    
+    return query.offset(skip).limit(limit).all()
+
+def get_rag_processed_count(db: Session) -> dict:
+    """Obtiene estadísticas de libros procesados con RAG"""
+    total_books = db.query(models.Book).count()
+    rag_processed_books = db.query(models.Book).filter(models.Book.rag_processed == True).count()
+    rag_available_books = db.query(models.Book).filter(
+        or_(
+            models.Book.file_path.isnot(None),
+            models.Book.drive_file_id.isnot(None)
+        )
+    ).count()
+    
+    return {
+        "total_books": total_books,
+        "rag_processed": rag_processed_books,
+        "rag_available": rag_available_books,
+        "rag_pending": rag_available_books - rag_processed_books
+    }
+
+def get_library_metrics(db: Session) -> dict:
+    """Obtiene métricas generales de la biblioteca"""
+    # Total de libros
+    total_books = db.query(models.Book).count()
+    
+    # Libros locales (tienen file_path pero no drive_file_id)
+    local_books = db.query(models.Book).filter(
+        and_(
+            models.Book.file_path.isnot(None),
+            models.Book.drive_file_id.is_(None)
+        )
+    ).count()
+    
+    # Libros en la nube (tienen drive_file_id)
+    cloud_books = db.query(models.Book).filter(
+        models.Book.drive_file_id.isnot(None)
+    ).count()
+    
+    # Libros híbridos (tienen tanto file_path como drive_file_id)
+    hybrid_books = db.query(models.Book).filter(
+        and_(
+            models.Book.file_path.isnot(None),
+            models.Book.drive_file_id.isnot(None)
+        )
+    ).count()
+    
+    # Total de categorías únicas
+    total_categories = db.query(models.Book.category).distinct().count()
+    
+    # Obtener lista de categorías con conteo
+    categories_with_count = db.query(
+        models.Book.category,
+        func.count(models.Book.id).label('count')
+    ).group_by(models.Book.category).order_by(models.Book.category).all()
+    
+    categories_info = [
+        {"name": cat[0], "count": cat[1]} 
+        for cat in categories_with_count if cat[0] is not None
+    ]
+    
+    return {
+        "total_books": total_books,
+        "local_books": local_books,
+        "cloud_books": cloud_books,
+        "hybrid_books": hybrid_books,
+        "total_categories": total_categories,
+        "categories": categories_info
+    }

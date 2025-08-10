@@ -23,3 +23,9 @@ class Book(Base):
     
     # Campo para indicar si el libro está sincronizado con Google Drive
     synced_to_drive = Column(Boolean, default=False) # Indica si el libro está sincronizado con Drive
+    
+    # Campos para RAG (Retrieval-Augmented Generation)
+    rag_processed = Column(Boolean, default=False) # Indica si el libro ha sido procesado para RAG
+    rag_book_id = Column(String, nullable=True) # ID único del libro en el sistema RAG (UUID)
+    rag_chunks_count = Column(Integer, nullable=True) # Número de chunks generados para RAG
+    rag_processed_date = Column(DateTime(timezone=True), nullable=True) # Fecha de procesamiento RAG

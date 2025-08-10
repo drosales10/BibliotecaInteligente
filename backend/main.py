@@ -44,18 +44,22 @@ if not API_KEY:
 genai.configure(api_key=API_KEY)
 models.Base.metadata.create_all(bind=database.engine)
 
-# Semáforo para limitar llamadas concurrentes a la API de IA
-ai_semaphore = threading.Semaphore(2)  # Máximo 2 llamadas concurrentes a la IA
+# Rate limiting para llamadas a APIs de IA
+from rate_limiter import (
+    call_gemini_with_limit_sync,
+    get_all_rate_limit_stats,
+    RateLimitExceeded
+)
+from rag_queue import get_rag_queue, TaskPriority
 
 # --- Funciones de IA y Procesamiento ---
 def analyze_with_gemini(text: str, max_retries: int = 3) -> dict:
     """
     Analiza texto con Gemini AI con manejo robusto de errores y retry logic
     """
-    # Usar semáforo para limitar llamadas concurrentes
-    with ai_semaphore:
+    try:
         model = genai.GenerativeModel('gemini-2.0-flash')
-    prompt = f"""
+        prompt = f"""
     Eres un bibliotecario experto. Analiza el siguiente texto extraído de las primeras páginas de un libro.
     Tu tarea es identificar el título, el autor y la categoría principal del libro.
     
@@ -76,90 +80,100 @@ def analyze_with_gemini(text: str, max_retries: int = 3) -> dict:
     
     Texto a analizar: --- {text[:4000]} ---
     """
+        
+        for attempt in range(max_retries):
+            try:
+                # Usar rate limiter para la llamada a Gemini
+                def _generate_analysis():
+                    return model.generate_content(
+                        prompt,
+                        generation_config=genai.types.GenerationConfig(
+                            temperature=0.1,  # Menor temperatura para respuestas más consistentes
+                            max_output_tokens=500,  # Limitar tokens de salida
+                            top_p=0.8,
+                            top_k=40
+                        ),
+                        safety_settings=[
+                            {
+                                "category": "HARM_CATEGORY_HARASSMENT",
+                                "threshold": "BLOCK_NONE"
+                            },
+                            {
+                                "category": "HARM_CATEGORY_HATE_SPEECH", 
+                                "threshold": "BLOCK_NONE"
+                            },
+                            {
+                                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                                "threshold": "BLOCK_NONE"
+                            },
+                            {
+                                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                                "threshold": "BLOCK_NONE"
+                            }
+                        ]
+                    )
+                
+                response = call_gemini_with_limit_sync(_generate_analysis)
+                
+                match = response.text.strip()
+                print(f"Respuesta original de la IA: {match}")
+                
+                if match.startswith("```json"):
+                    match = match[7:]
+                if match.endswith("```"):
+                    match = match[:-3]
+                
+                print(f"Respuesta procesada: {match}")
+                result = json.loads(match.strip())
+                print(f"Resultado parseado: {result}")
+                
+                # Validar que el resultado tenga las claves esperadas
+                if not all(key in result for key in ["title", "author", "category"]):
+                    raise ValueError("Respuesta de IA incompleta")
+                
+                # Traducir la categoría a español si es necesario
+                if "category" in result and result["category"]:
+                    result["category"] = translate_category_to_spanish(result["category"])
+                
+                # Si la IA devuelve "Desconocido", mantenerlo (no es un error)
+                # Solo cambiar si realmente hay un error en el procesamiento
+                return result
+                
+            except json.JSONDecodeError as e:
+                print(f"Error de JSON en intento {attempt + 1}: {e}")
+                if attempt == max_retries - 1:
+                    return {"title": "Título no detectado", "author": "Autor no detectado", "category": "Sin categoría"}
+                time.sleep(1)  # Esperar antes del retry
+            
+            except Exception as e:
+                error_msg = str(e).lower()
+                print(f"Error de IA en intento {attempt + 1}: {e}")
+                print(f"Tipo de error: {type(e).__name__}")
+                
+                # Si es un error de rate limiting o quota, esperar más tiempo
+                if any(keyword in error_msg for keyword in ["quota", "rate", "limit", "too many", "429", "resource exhausted"]):
+                    wait_time = (attempt + 1) * 3  # Espera progresiva: 3s, 6s, 9s
+                    print(f"Rate limit detectado, esperando {wait_time} segundos...")
+                    time.sleep(wait_time)
+                elif "timeout" in error_msg or "deadline" in error_msg:
+                    wait_time = (attempt + 1) * 2
+                    print(f"Timeout detectado, esperando {wait_time} segundos...")
+                    time.sleep(wait_time)
+                else:
+                    time.sleep(1)  # Espera corta para otros errores
+                
+                if attempt == max_retries - 1:
+                    print(f"Error final después de {max_retries} intentos: {e}")
+                    return {"title": "Título no detectado", "author": "Autor no detectado", "category": "Sin categoría"}
+        
+        return {"title": "Título no detectado", "author": "Autor no detectado", "category": "Sin categoría"}
     
-    for attempt in range(max_retries):
-        try:
-            # Configurar timeout y parámetros de seguridad
-            response = model.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.1,  # Menor temperatura para respuestas más consistentes
-                    max_output_tokens=500,  # Limitar tokens de salida
-                    top_p=0.8,
-                    top_k=40
-                ),
-                safety_settings=[
-                    {
-                        "category": "HARM_CATEGORY_HARASSMENT",
-                        "threshold": "BLOCK_NONE"
-                    },
-                    {
-                        "category": "HARM_CATEGORY_HATE_SPEECH", 
-                        "threshold": "BLOCK_NONE"
-                    },
-                    {
-                        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                        "threshold": "BLOCK_NONE"
-                    },
-                    {
-                        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                        "threshold": "BLOCK_NONE"
-                    }
-                ]
-            )
-            
-            match = response.text.strip()
-            print(f"Respuesta original de la IA: {match}")
-            
-            if match.startswith("```json"):
-                match = match[7:]
-            if match.endswith("```"):
-                match = match[:-3]
-            
-            print(f"Respuesta procesada: {match}")
-            result = json.loads(match.strip())
-            print(f"Resultado parseado: {result}")
-            
-            # Validar que el resultado tenga las claves esperadas
-            if not all(key in result for key in ["title", "author", "category"]):
-                raise ValueError("Respuesta de IA incompleta")
-            
-            # Traducir la categoría a español si es necesario
-            if "category" in result and result["category"]:
-                result["category"] = translate_category_to_spanish(result["category"])
-            
-            # Si la IA devuelve "Desconocido", mantenerlo (no es un error)
-            # Solo cambiar si realmente hay un error en el procesamiento
-            return result
-            
-        except json.JSONDecodeError as e:
-            print(f"Error de JSON en intento {attempt + 1}: {e}")
-            if attempt == max_retries - 1:
-                return {"title": "Título no detectado", "author": "Autor no detectado", "category": "Sin categoría"}
-            time.sleep(1)  # Esperar antes del retry
-            
-        except Exception as e:
-            error_msg = str(e).lower()
-            print(f"Error de IA en intento {attempt + 1}: {e}")
-            print(f"Tipo de error: {type(e).__name__}")
-            
-            # Si es un error de rate limiting o quota, esperar más tiempo
-            if any(keyword in error_msg for keyword in ["quota", "rate", "limit", "too many", "429", "resource exhausted"]):
-                wait_time = (attempt + 1) * 3  # Espera progresiva: 3s, 6s, 9s
-                print(f"Rate limit detectado, esperando {wait_time} segundos...")
-                time.sleep(wait_time)
-            elif "timeout" in error_msg or "deadline" in error_msg:
-                wait_time = (attempt + 1) * 2
-                print(f"Timeout detectado, esperando {wait_time} segundos...")
-                time.sleep(wait_time)
-            else:
-                time.sleep(1)  # Espera corta para otros errores
-            
-            if attempt == max_retries - 1:
-                print(f"Error final después de {max_retries} intentos: {e}")
-                return {"title": "Título no detectado", "author": "Autor no detectado", "category": "Sin categoría"}
-    
-    return {"title": "Título no detectado", "author": "Autor no detectado", "category": "Sin categoría"}
+    except RateLimitExceeded as e:
+        print(f"⚠️ Rate limit global alcanzado: {e}")
+        return {"title": "Sistema ocupado", "author": "Sistema ocupado", "category": "Error"}
+    except Exception as e:
+        print(f"❌ Error inesperado en análisis: {e}")
+        return {"title": "Error de análisis", "author": "Error de análisis", "category": "Error"}
 
 def process_pdf(file_path: str, static_dir: str) -> dict:
     doc = fitz.open(file_path)
@@ -3968,26 +3982,89 @@ async def upload_folder_books_cloud(
 
 # Endpoints RAG para conversación con libros
 @app.post("/rag/upload-book/", response_model=schemas.RagUploadResponse)
-async def upload_book_for_rag(file: UploadFile = File(...)):
-    """Sube un libro para procesamiento RAG y conversación con IA."""
+async def upload_book_for_rag(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Sube un libro para procesamiento RAG y conversación con IA. 
+    Si el libro no existe en la biblioteca, lo agrega automáticamente."""
     import uuid
+    from ai_analysis import analyze_book_content
     
-    book_id = str(uuid.uuid4())
-    file_location = os.path.join(STATIC_TEMP_DIR, f"{book_id}_{file.filename}")
+    rag_book_id = str(uuid.uuid4())
+    file_location = os.path.join(STATIC_TEMP_DIR, f"{rag_book_id}_{file.filename}")
     
     try:
         # Guardar archivo temporal
         with open(file_location, "wb") as f:
             f.write(await file.read())
         
-        # Procesar libro para RAG
-        import rag
-        await rag.process_book_for_rag(file_location, book_id)
+        # Verificar si el libro ya existe en la biblioteca
+        existing_book = crud.get_book_by_filename(db, file.filename)
         
-        return {"book_id": book_id, "message": "Libro procesado para RAG exitosamente."}
+        if existing_book:
+            # El libro ya existe en la biblioteca
+            if existing_book.rag_processed:
+                # Ya está procesado para RAG
+                return {
+                    "book_id": existing_book.rag_book_id,
+                    "message": "Libro ya existe en la biblioteca y está procesado para RAG.",
+                    "status": "already_exists"
+                }
+            else:
+                # Existe pero no procesado para RAG, usar el archivo existente si está disponible
+                if existing_book.file_path and os.path.exists(existing_book.file_path):
+                    file_to_process = existing_book.file_path
+                else:
+                    file_to_process = file_location
+                
+                # Procesar libro para RAG
+                import rag
+                result = await rag.process_book_for_rag(file_to_process, rag_book_id)
+                
+                # Actualizar estado RAG en la base de datos
+                chunks_count = result.get("chunks_processed", 0)
+                crud.update_book_rag_status(db, existing_book.id, rag_book_id, chunks_count)
+                
+                return {
+                    "book_id": rag_book_id,
+                    "message": "Libro existente procesado para RAG exitosamente.",
+                    "status": "processed_existing"
+                }
+        else:
+            # El libro no existe en la biblioteca, agregarlo
+            print(f"📚 Libro no encontrado en biblioteca, analizando y agregando: {file.filename}")
+            
+            # Analizar el contenido del libro con IA
+            book_info = await analyze_book_content(file_location)
+            
+            if not book_info:
+                raise HTTPException(status_code=500, detail="No se pudo analizar el contenido del libro")
+            
+            # Crear libro en la biblioteca
+            new_book = crud.create_local_book(
+                db=db,
+                title=book_info["title"],
+                author=book_info["author"],
+                category=book_info["category"],
+                cover_image_url=book_info.get("cover_image_url"),
+                file_path=file_location
+            )
+            
+            # Procesar libro para RAG
+            import rag
+            result = await rag.process_book_for_rag(file_location, rag_book_id)
+            
+            # Actualizar estado RAG en la base de datos
+            chunks_count = result.get("chunks_processed", 0)
+            crud.update_book_rag_status(db, new_book.id, rag_book_id, chunks_count)
+            
+            return {
+                "book_id": rag_book_id,
+                "message": f"Libro agregado a la biblioteca y procesado para RAG. Título: {book_info['title']}, Autor: {book_info['author']}",
+                "status": "new_book_added"
+            }
+        
     except Exception as e:
-        # Limpiar archivo temporal en caso de error
-        if os.path.exists(file_location):
+        # Limpiar archivo temporal en caso de error (solo si no es un libro nuevo)
+        if not existing_book and os.path.exists(file_location):
             os.remove(file_location)
         raise HTTPException(status_code=500, detail=f"Error al procesar el libro para RAG: {e}")
 
@@ -4000,6 +4077,309 @@ async def query_rag_endpoint(query_data: schemas.RagQuery):
         return {"response": response_text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al consultar RAG: {e}")
+
+@app.get("/rag/status")
+async def get_rag_status():
+    """Obtiene el estado y estadísticas del sistema RAG."""
+    try:
+        import rag
+        stats = rag.get_rag_stats()
+        return {
+            "status": "success",
+            "rag_stats": stats,
+            "message": "Estado de RAG obtenido exitosamente"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "rag_stats": None,
+            "message": f"Error al obtener estado de RAG: {str(e)}"
+        }
+
+@app.delete("/rag/book/{book_id}")
+async def delete_book_from_rag(book_id: str):
+    """Elimina un libro y sus embeddings de la base RAG."""
+    try:
+        import rag
+        # Obtener la colección
+        collection = rag.client.get_collection("book_rag_collection")
+        
+        # Buscar y eliminar embeddings para este book_id
+        results = collection.query(
+            query_embeddings=[[0.0] * 768],  # Embedding dummy para búsqueda
+            n_results=1000,  # Buscar muchos resultados
+            where={"book_id": book_id}
+        )
+        
+        if results['ids'] and len(results['ids'][0]) > 0:
+            # Eliminar embeddings encontrados
+            collection.delete(ids=results['ids'][0])
+            deleted_count = len(results['ids'][0])
+            
+            return {
+                "status": "success",
+                "message": f"Eliminados {deleted_count} embeddings del libro {book_id}",
+                "deleted_embeddings": deleted_count
+            }
+        else:
+            return {
+                "status": "not_found",
+                "message": f"No se encontraron embeddings para el libro {book_id}",
+                "deleted_embeddings": 0
+            }
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al eliminar libro de RAG: {e}")
+
+# ============================================================================
+# ENDPOINTS DE INTEGRACIÓN RAG-BIBLIOTECA
+# ============================================================================
+
+@app.get("/books/{book_id}/rag-status", response_model=schemas.BookRagStatus)
+async def get_book_rag_status_endpoint(book_id: int, db: Session = Depends(get_db)):
+    """Obtiene el estado RAG de un libro específico de la biblioteca"""
+    rag_status = crud.get_book_rag_status(db, book_id)
+    if not rag_status:
+        raise HTTPException(status_code=404, detail="Libro no encontrado")
+    return rag_status
+
+@app.post("/books/{book_id}/process-rag", response_model=schemas.RagProcessBookResponse)
+async def process_existing_book_for_rag(book_id: int, db: Session = Depends(get_db)):
+    """Procesa un libro existente en la biblioteca para RAG"""
+    import uuid
+    import rag
+    from google_drive_manager import get_drive_manager
+    
+    # Obtener el libro de la base de datos
+    book = crud.get_book(db, book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Libro no encontrado")
+    
+    # Verificar si ya está procesado
+    if book.rag_processed and book.rag_book_id:
+        return {
+            "success": True,
+            "message": "Libro ya procesado para RAG",
+            "rag_book_id": book.rag_book_id,
+            "chunks_processed": book.rag_chunks_count,
+            "book_already_in_rag": True
+        }
+    
+    # Verificar si el libro puede ser procesado
+    if not crud.can_book_be_processed_for_rag(book):
+        raise HTTPException(
+            status_code=400, 
+            detail="El libro no puede ser procesado para RAG. Formato no soportado o archivo no disponible."
+        )
+    
+    try:
+        file_path = None
+        temp_file = False
+        
+        # Determinar la ruta del archivo
+        if book.file_path and os.path.exists(book.file_path):
+            # Archivo local disponible
+            file_path = book.file_path
+        elif book.drive_file_id:
+            # Descargar desde Google Drive
+            temp_file_name = f"temp_rag_{book_id}_{book.drive_filename}"
+            temp_file_path = os.path.join(STATIC_TEMP_DIR, temp_file_name)
+            
+            drive_manager = get_drive_manager()
+            result = drive_manager.download_file_from_drive(book.drive_file_id, os.path.dirname(temp_file_path))
+            success = result.get("success", False)
+            if success:
+                temp_file_path = result.get("file_path", temp_file_path)
+            if success:
+                file_path = temp_file_path
+                temp_file = True
+            else:
+                raise HTTPException(status_code=500, detail="No se pudo descargar el archivo desde Google Drive")
+        else:
+            raise HTTPException(status_code=400, detail="No se encontró ubicación del archivo")
+        
+        # Generar ID único para RAG
+        rag_book_id = str(uuid.uuid4())
+        
+        # Procesar el libro para RAG
+        result = await rag.process_book_for_rag(file_path, rag_book_id)
+        
+        if result.get("status") == "already_exists":
+            # El libro ya existía en RAG, actualizar la base de datos
+            chunks_count = result.get("chunks_processed", 0)
+        else:
+            # Libro procesado exitosamente
+            chunks_count = result.get("chunks_processed", 0)
+        
+        # Actualizar el estado en la base de datos
+        updated_book = crud.update_book_rag_status(db, book_id, rag_book_id, chunks_count)
+        
+        return {
+            "success": True,
+            "message": "Libro procesado para RAG exitosamente",
+            "rag_book_id": rag_book_id,
+            "chunks_processed": chunks_count,
+            "book_already_in_rag": result.get("status") == "already_exists"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al procesar libro para RAG: {str(e)}")
+    
+    finally:
+        # Limpiar archivo temporal si se creó
+        if temp_file and file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass  # Ignorar errores de limpieza
+
+@app.get("/books/rag-stats")
+async def get_books_rag_stats(db: Session = Depends(get_db)):
+    """Obtiene estadísticas de procesamiento RAG de la biblioteca"""
+    try:
+        stats = crud.get_rag_processed_count(db)
+        return {
+            "status": "success",
+            "library_rag_stats": stats,
+            "message": "Estadísticas de RAG obtenidas exitosamente"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "library_rag_stats": None,
+            "message": f"Error al obtener estadísticas de RAG: {str(e)}"
+        }
+
+@app.get("/api/library/metrics")
+async def get_library_metrics(db: Session = Depends(get_db)):
+    """Obtiene métricas generales de la biblioteca"""
+    try:
+        metrics = crud.get_library_metrics(db)
+        return {
+            "status": "success",
+            "metrics": metrics,
+            "message": "Métricas de biblioteca obtenidas exitosamente"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "metrics": None,
+            "message": f"Error al obtener métricas de biblioteca: {str(e)}"
+        }
+
+@app.get("/books/rag-processed")
+async def get_rag_processed_books(
+    skip: int = 0, 
+    limit: int = 100, 
+    rag_processed: bool = None,
+    db: Session = Depends(get_db)
+):
+    """Obtiene libros filtrados por estado de procesamiento RAG"""
+    try:
+        books = crud.get_books_by_rag_status(db, rag_processed, skip, limit)
+        return {
+            "books": books,
+            "total": len(books),
+            "skip": skip,
+            "limit": limit,
+            "rag_processed_filter": rag_processed
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener libros: {str(e)}")
+
+@app.get("/api/rate-limit-stats")
+async def get_rate_limit_statistics():
+    """Obtiene estadísticas de rate limiting de todas las APIs"""
+    try:
+        stats = get_all_rate_limit_stats()
+        return {
+            "status": "success",
+            "rate_limit_stats": stats,
+            "message": "Estadísticas de rate limiting obtenidas exitosamente"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "rate_limit_stats": None,
+            "message": f"Error al obtener estadísticas de rate limiting: {str(e)}"
+        }
+
+@app.get("/api/rag-queue/stats")
+async def get_rag_queue_stats():
+    """Obtiene estadísticas de la cola de procesamiento RAG"""
+    try:
+        queue = get_rag_queue()
+        stats = queue.get_stats()
+        return {
+            "status": "success",
+            "queue_stats": stats,
+            "message": "Estadísticas de cola RAG obtenidas exitosamente"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "queue_stats": None,
+            "message": f"Error al obtener estadísticas de cola RAG: {str(e)}"
+        }
+
+@app.get("/api/rag-queue/task/{task_id}")
+async def get_rag_task_status(task_id: str):
+    """Obtiene el estado de una tarea específica en la cola RAG"""
+    try:
+        queue = get_rag_queue()
+        task = queue.get_task_status(task_id)
+        
+        if not task:
+            raise HTTPException(status_code=404, detail="Tarea no encontrada")
+        
+        position = queue.get_queue_position(task_id)
+        
+        return {
+            "status": "success",
+            "task": {
+                "id": task.id,
+                "book_id": task.book_id,
+                "status": task.status.value,
+                "progress": task.progress,
+                "priority": task.priority.name,
+                "created_at": task.created_at.isoformat(),
+                "started_at": task.started_at.isoformat() if task.started_at else None,
+                "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+                "error_message": task.error_message,
+                "queue_position": position if position > 0 else None
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {
+            "status": "error",
+            "task": None,
+            "message": f"Error al obtener estado de tarea: {str(e)}"
+        }
+
+@app.delete("/api/rag-queue/task/{task_id}")
+async def cancel_rag_task(task_id: str):
+    """Cancela una tarea pendiente en la cola RAG"""
+    try:
+        queue = get_rag_queue()
+        success = queue.cancel_task(task_id)
+        
+        if success:
+            return {
+                "status": "success",
+                "message": "Tarea cancelada exitosamente"
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "No se pudo cancelar la tarea (puede que ya esté procesándose o completada)"
+            }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error al cancelar tarea: {str(e)}"
+        }
 
 if __name__ == "__main__":
     import uvicorn

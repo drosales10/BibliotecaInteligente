@@ -7,25 +7,106 @@ import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
 import tiktoken
+from rate_limiter import (
+    call_gemini_embeddings_with_limit_sync,
+    call_gemini_with_limit_sync,
+    RateLimitExceeded
+)
 
 # Load environment variables
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Initialize ChromaDB client
-client = chromadb.Client()
+# Initialize ChromaDB client with PERSISTENCE
+# Crear directorio para persistencia de embeddings
+PERSIST_DIRECTORY = "chroma_persistence"
+os.makedirs(PERSIST_DIRECTORY, exist_ok=True)
+
+print(f"🔒 ChromaDB configurado con persistencia en: {PERSIST_DIRECTORY}")
+
+# Cliente con persistencia
+client = chromadb.PersistentClient(path=PERSIST_DIRECTORY)
 collection = client.get_or_create_collection(name="book_rag_collection")
+
+print(f"✅ Colección RAG cargada: {collection.name}")
+print(f"📊 Total de embeddings almacenados: {collection.count()}")
 
 # Initialize Gemini embedding model
 EMBEDDING_MODEL = "models/text-embedding-004"
 GENERATION_MODEL = "models/gemini-2.0-flash"
 
+def get_rag_stats():
+    """Obtiene estadísticas de la base de datos RAG."""
+    try:
+        total_embeddings = collection.count()
+        print(f"📊 Total de embeddings en la base: {total_embeddings}")
+        
+        # Obtener metadatos para contar libros únicos
+        if total_embeddings > 0:
+            # Obtener una muestra para ver metadatos
+            sample = collection.get(limit=1)
+            if sample and 'metadatas' in sample and sample['metadatas']:
+                book_ids = set()
+                for metadata in sample['metadatas']:
+                    if metadata and 'book_id' in metadata:
+                        book_ids.add(metadata['book_id'])
+                
+                return {
+                    "total_embeddings": total_embeddings,
+                    "unique_books": len(book_ids),
+                    "persistence_directory": PERSIST_DIRECTORY,
+                    "status": "active"
+                }
+        
+        return {
+            "total_embeddings": total_embeddings,
+            "unique_books": 0,
+            "persistence_directory": PERSIST_DIRECTORY,
+            "status": "active"
+        }
+    except Exception as e:
+        print(f"❌ Error obteniendo estadísticas RAG: {e}")
+        return {
+            "total_embeddings": 0,
+            "unique_books": 0,
+            "persistence_directory": PERSIST_DIRECTORY,
+            "status": "error",
+            "error": str(e)
+        }
+
+def check_book_exists(book_id: str) -> bool:
+    """Verifica si un libro ya existe en la base RAG."""
+    try:
+        # Buscar embeddings para este book_id
+        results = collection.query(
+            query_embeddings=[[0.0] * 768],  # Embedding dummy para búsqueda
+            n_results=1,
+            where={"book_id": book_id}
+        )
+        return len(results['documents'][0]) > 0
+    except Exception as e:
+        print(f"❌ Error verificando existencia del libro {book_id}: {e}")
+        return False
+
 def get_embedding(text):
-    """Generates an embedding for the given text."""
+    """Generates an embedding for the given text with rate limiting."""
     if not text.strip():
         return [] # Return empty list for empty text
-    return genai.embed_content(model=EMBEDDING_MODEL, content=text)["embedding"]
+    
+    try:
+        # Usar rate limiter para embeddings
+        def _get_embedding():
+            return genai.embed_content(model=EMBEDDING_MODEL, content=text)["embedding"]
+        
+        return call_gemini_embeddings_with_limit_sync(_get_embedding)
+        
+    except RateLimitExceeded as e:
+        print(f"⚠️ Rate limit alcanzado para embeddings: {e}")
+        return []  # Retornar lista vacía en caso de rate limit
+    except Exception as e:
+        print(f"❌ Error generando embedding: {e}")
+        return []
 
 def extract_text_from_pdf(file_path: str) -> str:
     """Extracts text from a PDF file."""
@@ -73,6 +154,14 @@ def chunk_text(text: str, max_tokens: int = 1000) -> list[str]:
 
 async def process_book_for_rag(file_path: str, book_id: str):
     """Extracts text, chunks it, generates embeddings, and stores in ChromaDB."""
+    
+    # Verificar si el libro ya existe en RAG
+    if check_book_exists(book_id):
+        print(f"✅ Libro {book_id} ya existe en RAG. Saltando reprocesamiento.")
+        return {"status": "already_exists", "message": "Libro ya procesado anteriormente"}
+    
+    print(f"🔄 Procesando libro {book_id} para RAG...")
+    
     if file_path.lower().endswith(".pdf"):
         text = extract_text_from_pdf(file_path)
     elif file_path.lower().endswith(".epub"):
@@ -87,6 +176,8 @@ async def process_book_for_rag(file_path: str, book_id: str):
     if not chunks:
         raise ValueError("Could not chunk text from the book.")
 
+    print(f"📝 Generando embeddings para {len(chunks)} chunks...")
+    
     for i, chunk in enumerate(chunks):
         embedding = get_embedding(chunk) # No await here
         if embedding: # Only add if embedding is not empty
@@ -96,24 +187,37 @@ async def process_book_for_rag(file_path: str, book_id: str):
                 metadatas=[{"book_id": book_id, "chunk_index": i}],
                 ids=[f"{book_id}_chunk_{i}"]
             )
-    print(f"Processed {len(chunks)} chunks for book ID: {book_id}")
+    
+    print(f"✅ Procesado {len(chunks)} chunks para libro ID: {book_id}")
+    
+    # Obtener estadísticas actualizadas
+    stats = get_rag_stats()
+    print(f"📊 Estadísticas RAG actualizadas: {stats}")
+    
+    return {"status": "processed", "chunks_processed": len(chunks), "stats": stats}
 
 async def query_rag(query: str, book_id: str):
-    """Queries the RAG system for answers based on the book content."""
-    query_embedding = get_embedding(query) # No await here
-    if not query_embedding:
-        return "I cannot process an empty query."
+    """Queries the RAG system for answers based on the book content with rate limiting."""
+    try:
+        # Generar embedding de la consulta con rate limiting
+        query_embedding = get_embedding(query)
+        if not query_embedding:
+            return "No puedo procesar una consulta vacía."
 
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=5, # Retrieve top 5 relevant chunks
-        where={"book_id": book_id}
-    )
+        # Buscar chunks relevantes
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=5, # Retrieve top 5 relevant chunks
+            where={"book_id": book_id}
+        )
 
-    relevant_chunks = [doc for doc in results['documents'][0]]
-    context = "\n\n".join(relevant_chunks)
+        relevant_chunks = [doc for doc in results['documents'][0]]
+        if not relevant_chunks:
+            return "No encontré información relevante en el libro para responder tu pregunta."
+            
+        context = "\n\n".join(relevant_chunks)
 
-    prompt = f"""Eres un asistente útil que responde preguntas.
+        prompt = f"""Eres un asistente útil que responde preguntas.
 Prioriza la información del Contexto proporcionado para responder a la pregunta.
 Si la información en el Contexto no es suficiente para responder la pregunta, utiliza tus conocimientos generales.
 Responde siempre en español.
@@ -124,6 +228,16 @@ Contexto:
 Pregunta: {query}
 Respuesta:"""
 
-    model = genai.GenerativeModel(GENERATION_MODEL)
-    response = model.generate_content(prompt) # No await here
-    return response.text
+        # Usar rate limiter para la generación de respuesta
+        def _generate_response():
+            model = genai.GenerativeModel(GENERATION_MODEL)
+            response = model.generate_content(prompt)
+            return response.text
+
+        return call_gemini_with_limit_sync(_generate_response)
+        
+    except RateLimitExceeded as e:
+        return f"⚠️ El sistema está ocupado procesando otras consultas. Por favor, espera un momento e intenta de nuevo. ({e})"
+    except Exception as e:
+        print(f"❌ Error en consulta RAG: {e}")
+        return f"❌ Ocurrió un error al procesar tu consulta: {str(e)}"

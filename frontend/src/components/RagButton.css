@@ -1,0 +1,175 @@
+/* Botón RAG base */
+.rag-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  white-space: nowrap;
+  min-height: 36px;
+}
+
+/* Estados del botón RAG */
+.rag-button--loading {
+  background: #f8f9fa;
+  color: #6c757d;
+  cursor: not-allowed;
+}
+
+.rag-button--processing {
+  background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%);
+  color: #2d3436;
+  cursor: not-allowed;
+  animation: ragProcessing 1.5s ease-in-out infinite;
+}
+
+.rag-button--process {
+  background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(116, 185, 255, 0.3);
+}
+
+.rag-button--process:hover {
+  background: linear-gradient(135deg, #0984e3 0%, #74b9ff 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(116, 185, 255, 0.4);
+}
+
+.rag-button--ready {
+  background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 184, 148, 0.3);
+}
+
+.rag-button--ready:hover {
+  background: linear-gradient(135deg, #00cec9 0%, #00b894 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 184, 148, 0.4);
+}
+
+/* Grupo de botón RAG con información */
+.rag-button-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+}
+
+.rag-status-info {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: #6c757d;
+}
+
+.rag-chunks-count {
+  background: #e9ecef;
+  color: #495057;
+  padding: 0.2rem 0.5rem;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+/* Animaciones */
+@keyframes ragProcessing {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+/* Estados hover y focus mejorados */
+.rag-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(116, 185, 255, 0.3);
+}
+
+.rag-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+  .rag-button {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.8rem;
+    min-height: 32px;
+  }
+  
+  .rag-button-group {
+    align-items: center;
+  }
+  
+  .rag-status-info {
+    font-size: 0.7rem;
+  }
+}
+
+/* Modo oscuro */
+@media (prefers-color-scheme: dark) {
+  .rag-button--loading {
+    background: #343a40;
+    color: #adb5bd;
+  }
+  
+  .rag-chunks-count {
+    background: #495057;
+    color: #f8f9fa;
+  }
+  
+  .rag-status-info {
+    color: #adb5bd;
+  }
+}
+
+/* Estados específicos para integración con tarjetas de libros */
+.book-card .rag-button {
+  margin-top: 0.5rem;
+  width: 100%;
+  justify-content: center;
+}
+
+.book-card .rag-button-group {
+  margin-top: 0.5rem;
+  width: 100%;
+}
+
+.book-card .rag-button-group .rag-button {
+  width: 100%;
+  margin-bottom: 0.3rem;
+}
+
+/* Efectos visuales mejorados */
+.rag-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
+  transform: translateX(-100%);
+  transition: transform 0.6s;
+  border-radius: inherit;
+}
+
+.rag-button:hover::before {
+  transform: translateX(100%);
+}
+
+.rag-button {
+  position: relative;
+  overflow: hidden;
+}

@@ -1,0 +1,626 @@
+/* Monitor de Rate Limiting */
+.rate-limit-monitor-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.rate-limit-monitor {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 1200px;
+  max-height: calc(100vh - 40px);
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  margin: auto;
+}
+
+.monitor-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 20px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.monitor-header h2 {
+  margin: 0;
+  font-size: 1.5em;
+  font-weight: 700;
+}
+
+.monitor-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.auto-refresh-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.auto-refresh-toggle input[type="checkbox"] {
+  transform: scale(1.2);
+}
+
+.refresh-btn, .close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.refresh-btn:hover, .close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.monitor-content {
+  padding: 30px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Secciones de estadísticas */
+.stats-section {
+  margin-bottom: 40px;
+}
+
+.stats-section h3 {
+  margin: 0 0 20px 0;
+  color: #2d3748;
+  font-size: 1.3em;
+  font-weight: 600;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 10px;
+}
+
+/* Rate Limiting Grid */
+.rate-limit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 25px;
+  margin-bottom: 30px;
+}
+
+.rate-limit-card, .queue-card {
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 15px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.rate-limit-card h4, .queue-card h4 {
+  margin: 0 0 15px 0;
+  color: #4a5568;
+  font-size: 1.1em;
+  font-weight: 600;
+}
+
+/* Grid de estadísticas */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.stat-label {
+  font-size: 0.9em;
+  color: #718096;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-weight: 700;
+  font-size: 1em;
+}
+
+.stat-value.success {
+  color: #38a169;
+}
+
+.stat-value.warning {
+  color: #d69e2e;
+}
+
+.stat-value.error {
+  color: #e53e3e;
+}
+
+.stat-value.processing {
+  color: #3182ce;
+}
+
+/* Cola de procesamiento */
+.queue-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.queue-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+/* Tareas recientes */
+.recent-tasks {
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 15px;
+  padding: 20px;
+}
+
+.recent-tasks h4 {
+  margin: 0 0 15px 0;
+  color: #4a5568;
+  font-size: 1.1em;
+  font-weight: 600;
+}
+
+.tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.task-item {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 15px;
+  transition: all 0.2s ease;
+}
+
+.task-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.task-item.processing {
+  border-left: 4px solid #3182ce;
+}
+
+.task-item.completed {
+  border-left: 4px solid #38a169;
+}
+
+.task-item.failed {
+  border-left: 4px solid #e53e3e;
+}
+
+.task-item.pending {
+  border-left: 4px solid #d69e2e;
+}
+
+.task-info {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.task-id {
+  font-family: 'Courier New', monospace;
+  background: #edf2f7;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.85em;
+  color: #4a5568;
+  font-weight: 600;
+}
+
+.task-book {
+  background: #e6fffa;
+  color: #234e52;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.task-status {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.8em;
+  font-weight: 600;
+}
+
+.task-status.pending {
+  background: #fef5e7;
+  color: #c05621;
+}
+
+.task-status.processing {
+  background: #ebf8ff;
+  color: #2c5282;
+}
+
+.task-status.completed {
+  background: #f0fff4;
+  color: #22543d;
+}
+
+.task-status.failed {
+  background: #fed7d7;
+  color: #742a2a;
+}
+
+.task-priority {
+  background: #f7fafc;
+  color: #4a5568;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.8em;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+/* Barra de progreso */
+.task-progress {
+  width: 100%;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3182ce, #63b3ed);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  animation: progressShine 2s infinite;
+}
+
+@keyframes progressShine {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Estados de carga */
+.loading-state {
+  text-align: center;
+  padding: 40px;
+  color: #718096;
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .rate-limit-monitor-overlay {
+    padding: 10px;
+  }
+  
+  .rate-limit-monitor {
+    width: 100%;
+    max-height: calc(100vh - 20px);
+    border-radius: 15px;
+  }
+  
+  .monitor-header {
+    padding: 15px 20px;
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+  }
+  
+  .monitor-header h2 {
+    font-size: 1.3em;
+  }
+  
+  .monitor-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+  }
+  
+  .auto-refresh-toggle {
+    font-size: 0.85em;
+  }
+  
+  .refresh-btn, .close-btn {
+    padding: 6px 10px;
+    font-size: 0.9em;
+  }
+  
+  .monitor-content {
+    padding: 15px;
+  }
+  
+  .stats-section {
+    margin-bottom: 25px;
+  }
+  
+  .stats-section h3 {
+    font-size: 1.1em;
+    margin-bottom: 15px;
+  }
+  
+  .rate-limit-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+  
+  .queue-overview {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+  
+  .rate-limit-card, .queue-card, .recent-tasks {
+    padding: 15px;
+  }
+  
+  .rate-limit-card h4, .queue-card h4, .recent-tasks h4 {
+    font-size: 1em;
+    margin-bottom: 12px;
+  }
+  
+  .stat-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .stat-item {
+    padding: 10px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .stat-label {
+    font-size: 0.85em;
+  }
+  
+  .stat-value {
+    font-size: 1.1em;
+    align-self: flex-end;
+  }
+  
+  .task-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  
+  .task-id, .task-book, .task-status, .task-priority {
+    font-size: 0.8em;
+  }
+  
+  .tasks-list {
+    max-height: 250px;
+  }
+}
+
+/* Responsive para pantallas muy pequeñas */
+@media (max-width: 480px) {
+  .rate-limit-monitor-overlay {
+    padding: 5px;
+  }
+  
+  .rate-limit-monitor {
+    max-height: calc(100vh - 10px);
+    border-radius: 10px;
+  }
+  
+  .monitor-header {
+    padding: 12px 15px;
+    gap: 10px;
+  }
+  
+  .monitor-header h2 {
+    font-size: 1.2em;
+  }
+  
+  .monitor-controls {
+    gap: 8px;
+  }
+  
+  .auto-refresh-toggle {
+    font-size: 0.8em;
+  }
+  
+  .refresh-btn, .close-btn {
+    padding: 5px 8px;
+    font-size: 0.85em;
+  }
+  
+  .monitor-content {
+    padding: 12px;
+  }
+  
+  .stats-section h3 {
+    font-size: 1em;
+  }
+  
+  .rate-limit-card, .queue-card, .recent-tasks {
+    padding: 12px;
+  }
+  
+  .rate-limit-card h4, .queue-card h4, .recent-tasks h4 {
+    font-size: 0.95em;
+  }
+  
+  .stat-item {
+    padding: 8px;
+  }
+  
+  .task-item {
+    padding: 12px;
+  }
+}
+
+/* Modo oscuro */
+:global(.dark-mode) .rate-limit-monitor {
+  background: #2d3748;
+  color: #e2e8f0;
+}
+
+:global(.dark-mode) .stats-section h3 {
+  color: #f7fafc;
+  border-color: #4a5568;
+}
+
+:global(.dark-mode) .rate-limit-card,
+:global(.dark-mode) .queue-card,
+:global(.dark-mode) .recent-tasks {
+  background: #4a5568;
+  border-color: #718096;
+}
+
+:global(.dark-mode) .rate-limit-card h4,
+:global(.dark-mode) .queue-card h4,
+:global(.dark-mode) .recent-tasks h4 {
+  color: #f7fafc;
+}
+
+:global(.dark-mode) .stat-item {
+  background: #2d3748;
+  border-color: #718096;
+}
+
+:global(.dark-mode) .stat-label {
+  color: #a0aec0;
+}
+
+:global(.dark-mode) .task-item {
+  background: #2d3748;
+  border-color: #718096;
+}
+
+:global(.dark-mode) .task-id {
+  background: #4a5568;
+  color: #e2e8f0;
+}
+
+:global(.dark-mode) .task-book {
+  background: #234e52;
+  color: #c6f6d5;
+}
+
+:global(.dark-mode) .task-priority {
+  background: #4a5568;
+  color: #e2e8f0;
+}
+
+:global(.dark-mode) .loading-state {
+  color: #a0aec0;
+}
+
+/* Fallback para sistemas que prefieren modo oscuro */
+@media (prefers-color-scheme: dark) {
+  .rate-limit-monitor {
+    background: #2d3748;
+    color: #e2e8f0;
+  }
+  
+  .stats-section h3 {
+    color: #f7fafc;
+    border-color: #4a5568;
+  }
+  
+  .rate-limit-card, .queue-card, .recent-tasks {
+    background: #4a5568;
+    border-color: #718096;
+  }
+  
+  .rate-limit-card h4, .queue-card h4, .recent-tasks h4 {
+    color: #f7fafc;
+  }
+  
+  .stat-item {
+    background: #2d3748;
+    border-color: #718096;
+  }
+  
+  .stat-label {
+    color: #a0aec0;
+  }
+  
+  .task-item {
+    background: #2d3748;
+    border-color: #718096;
+  }
+  
+  .task-id {
+    background: #4a5568;
+    color: #e2e8f0;
+  }
+  
+  .task-book {
+    background: #234e52;
+    color: #c6f6d5;
+  }
+  
+  .task-priority {
+    background: #4a5568;
+    color: #e2e8f0;
+  }
+  
+  .loading-state {
+    color: #a0aec0;
+  }
+}

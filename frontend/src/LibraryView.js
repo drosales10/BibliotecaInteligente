@@ -14,6 +14,7 @@ import AdvancedSearchBar from './components/AdvancedSearchBar';
 import SearchFilters from './components/SearchFilters';
 import FilterChips from './components/FilterChips';
 import BookEditModal from './components/BookEditModal';
+import RagButton from './components/RagButton';
 
 import { getBackendUrl } from './config/api';
 import './LibraryView.css';
@@ -844,6 +845,15 @@ function LibraryView() {
                     📖 Leer
                   </Link>
                 )}
+                
+                {/* Botón RAG */}
+                <RagButton 
+                  book={book} 
+                  onRagProcessed={(bookId, result) => {
+                    console.log(`Libro ${bookId} procesado para RAG:`, result);
+                    // Aquí podrías actualizar el estado local si es necesario
+                  }}
+                />
               </div>
             </div>
           );

@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import DriveStatusModal from './components/DriveStatusModal';
 import ModeSelector from './components/ModeSelector';
 import DarkModeToggle from './components/DarkModeToggle';
+import RateLimitMonitor from './components/RateLimitMonitor';
 import { useAppMode } from './contexts/AppModeContext';
 import { useDriveStatus } from './hooks/useDriveStatus';
 import './Header.css';
@@ -21,6 +22,7 @@ function Header() {
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isRateLimitMonitorOpen, setIsRateLimitMonitorOpen] = useState(false);
 
   useEffect(() => {
     const checkIfMobile = () => {
@@ -114,6 +116,18 @@ function Header() {
         >
           IA Chat
         </NavLink>
+        
+        {/* Botón del Monitor de Rate Limiting */}
+        <button 
+          className="nav-link monitor-btn" 
+          onClick={() => {
+            setIsRateLimitMonitorOpen(true);
+            closeMobileMenu();
+          }}
+          title="Monitor de Rate Limiting"
+        >
+          🚦 Monitor
+        </button>
       </nav>
 
       {/* Overlay para cerrar menú móvil */}
@@ -124,6 +138,12 @@ function Header() {
           aria-hidden="true"
         />
       )}
+      
+      {/* Monitor de Rate Limiting */}
+      <RateLimitMonitor 
+        isOpen={isRateLimitMonitorOpen}
+        onClose={() => setIsRateLimitMonitorOpen(false)}
+      />
     </header>
   );
 }
