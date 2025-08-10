@@ -4,6 +4,7 @@ import { useDriveStatus } from './hooks/useDriveStatus';
 import { useBookService } from './hooks/useBookService';
 import { useAppMode } from './contexts/AppModeContext';
 import { getBackendUrl } from './config/api';
+import Button from './components/Button';
 import './UploadView.css';
 
 function UploadView() {
@@ -554,32 +555,83 @@ function UploadView() {
 
   return (
     <div className="upload-view-container" onDrop={handleDrop} onDragOver={handleDragOver}>
+      
+      {/* Botones de acción principales */}
+      <div className="action-buttons-container">
+        <div className="action-buttons-header">
+          <h2 className="action-buttons-title">📚 Añadir Libros a tu Biblioteca</h2>
+          <p className="action-buttons-subtitle">
+            Selecciona el método que prefieras para agregar nuevos libros a tu colección
+          </p>
+        </div>
+        <div className="action-buttons-grid">
+          <Button 
+            variant="primary" 
+            size="large" 
+            icon="📖"
+            onClick={() => setUploadMode('single')}
+            className={uploadMode === 'single' ? 'active-mode' : ''}
+          >
+            LIBRO INDIVIDUAL
+          </Button>
+          
+          <Button 
+            variant="secondary" 
+            size="large" 
+            icon="📚"
+            onClick={() => setUploadMode('bulk')}
+            className={uploadMode === 'bulk' ? 'active-mode' : ''}
+          >
+            LIBROS EN ZIP
+          </Button>
+          
+          <Button 
+            variant="accent" 
+            size="large" 
+            icon="📁"
+            onClick={() => setUploadMode('folder')}
+            className={uploadMode === 'folder' ? 'active-mode' : ''}
+          >
+            POR CARPETA LOCAL
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            size="large" 
+            icon="💾"
+            onClick={() => setUploadMode('drive-folder')}
+            className={uploadMode === 'drive-folder' ? 'active-mode' : ''}
+          >
+            POR CARPETA NUBE
+          </Button>
+        </div>
+      </div>
             
-      {/* Selector de modo */}
-      <div className="upload-mode-selector">
+      {/* Selector de modo - Oculto ya que tenemos los botones principales */}
+      <div className="upload-mode-selector" style={{ display: 'none' }}>
         <button 
           className={`mode-button ${uploadMode === 'single' ? 'active' : ''}`}
           onClick={() => setUploadMode('single')}
         >
-          📖 Libro Individual
+          📖 LIBRO INDIVIDUAL
         </button>
         <button 
           className={`mode-button ${uploadMode === 'bulk' ? 'active' : ''}`}
           onClick={() => setUploadMode('bulk')}
         >
-          📚 Carga de Libros en ZIP
+          📚 LIBROS EN ZIP
         </button>
         <button 
           className={`mode-button ${uploadMode === 'folder' ? 'active' : ''}`}
           onClick={() => setUploadMode('folder')}
         >
-          📁 Seleccionar Carpeta
+          📁 POR CARPETA LOCAL
         </button>
         <button 
           className={`mode-button ${uploadMode === 'drive-folder' ? 'active' : ''}`}
           onClick={() => setUploadMode('drive-folder')}
         >
-          💾 Google Drive
+          💾 POR CARPETA NUBE
         </button>
       </div>
 

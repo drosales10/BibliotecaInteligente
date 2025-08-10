@@ -20,6 +20,7 @@ __pycache__/
 # Directorios de dependencias
 /backend/node_modules/
 /frontend/node_modules/
+/frontend/build/
 
 # Archivos de log y temporales
 *.log
