@@ -26,6 +26,19 @@ function UploadView() {
   useEffect(() => {
     console.log('🔍 UploadView montado con appMode:', appMode);
     console.log('🔍 showDirectoryPicker disponible:', 'showDirectoryPicker' in window);
+    console.log('🔍 window object keys:', Object.keys(window).filter(key => key.includes('show') || key.includes('Directory') || key.includes('File')));
+    console.log('🔍 navigator.userAgent:', navigator.userAgent);
+    console.log('🔍 window.showDirectoryPicker:', window.showDirectoryPicker);
+    console.log('🔍 typeof window.showDirectoryPicker:', typeof window.showDirectoryPicker);
+    
+    // Verificar si hay algún error en la consola
+    if (!('showDirectoryPicker' in window)) {
+      console.warn('⚠️ showDirectoryPicker no está disponible. Posibles causas:');
+      console.warn('   - Navegador no compatible');
+      console.warn('   - API deshabilitada por políticas de seguridad');
+      console.warn('   - Error en la carga del script');
+      console.warn('   - Contexto de seguridad incorrecto');
+    }
   }, [appMode]);
 
   // Logging cuando cambia el modo de upload
@@ -43,15 +56,105 @@ function UploadView() {
     setMessage('');
   };
 
+  // Función fallback para navegadores que soportan webkitDirectory
+  const handleFolderSelectFallback = () => {
+    console.log('🔧 Usando método fallback con webkitDirectory');
+    
+    // Crear input file con webkitDirectory
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.webkitDirectory = true;
+    input.multiple = true;
+    
+    input.onchange = async (event) => {
+      const files = Array.from(event.target.files);
+      console.log(`📁 ${files.length} archivos seleccionados de la carpeta`);
+      
+      if (files.length === 0) {
+        setMessage('❌ No se seleccionaron archivos');
+        return;
+      }
+      
+      // Simular el procesamiento de carpeta
+      await processFolderFiles(files);
+    };
+    
+    // Trigger file selection
+    input.click();
+  };
+
+  // Función para procesar archivos de carpeta (tanto para API moderna como fallback)
+  const processFolderFiles = async (files) => {
+    setIsLoading(true);
+    setMessage('');
+    setProgress({ current: 0, total: files.length, message: 'Preparando carga de carpeta...' });
+    
+    try {
+      const formData = new FormData();
+      
+      files.forEach((file, index) => {
+        formData.append('files', file);
+        console.log(`📄 Archivo ${index + 1}: ${file.webkitRelativePath || file.name}`);
+      });
+      
+      const endpoint = appMode === 'local' 
+        ? `${getBackendUrl()}/api/upload-folder-local/`
+        : `${getBackendUrl()}/api/upload-folder-cloud/`;
+      
+      console.log(`🔗 Enviando carpeta a: ${endpoint}`);
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error del servidor: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      setMessage(`✅ ${result.message || 'Carpeta cargada exitosamente'}`);
+      
+      // Actualizar lista de libros
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+      
+    } catch (error) {
+      console.error('❌ Error cargando carpeta:', error);
+      setMessage(`❌ Error: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+      setProgress(null);
+    }
+  };
+
   const handleFolderSelect = async () => {
     console.log('🔍 handleFolderSelect llamado');
     console.log('🔍 appMode actual:', appMode);
+    console.log('🔍 Verificación detallada de showDirectoryPicker:');
+    console.log('   - showDirectoryPicker in window:', 'showDirectoryPicker' in window);
+    console.log('   - window.showDirectoryPicker:', window.showDirectoryPicker);
+    console.log('   - typeof window.showDirectoryPicker:', typeof window.showDirectoryPicker);
+    console.log('   - window.showDirectoryPicker.toString():', window.showDirectoryPicker?.toString());
     
     try {
       // Verificar si el navegador soporta la API de directorios
       if (!('showDirectoryPicker' in window)) {
         console.log('❌ showDirectoryPicker no está disponible en este navegador');
-        setMessage('❌ Tu navegador no soporta la selección de carpetas. Usa la opción de archivo ZIP.');
+        console.log('🔍 Verificando alternativas disponibles:');
+        console.log('   - showOpenFilePicker:', 'showOpenFilePicker' in window);
+        console.log('   - webkitDirectory:', 'webkitDirectory' in HTMLInputElement.prototype);
+        console.log('   - File System Access API disponible:', 'FileSystemHandle' in window);
+        
+        // Verificar si webkitDirectory está disponible como fallback
+        if ('webkitDirectory' in HTMLInputElement.prototype) {
+          console.log('💡 Usando webkitDirectory como alternativa');
+          handleFolderSelectFallback();
+          return;
+        }
+        
+        setMessage('❌ Tu navegador no soporta la selección de carpetas. Usa la opción de archivo ZIP o un navegador compatible como Chrome/Edge.');
         return;
       }
 
@@ -65,6 +168,11 @@ function UploadView() {
       setMessage(`✅ Carpeta seleccionada: ${dirHandle.name}`);
     } catch (error) {
       console.error('❌ Error al seleccionar carpeta:', error);
+      console.error('   - Error name:', error.name);
+      console.error('   - Error message:', error.message);
+      console.error('   - Error stack:', error.stack);
+      console.error('   - Error constructor:', error.constructor.name);
+      
       if (error.name === 'AbortError') {
         setMessage('❌ Selección de carpeta cancelada por el usuario.');
       } else {
@@ -73,7 +181,7 @@ function UploadView() {
     }
   };
 
-  const processFolderFiles = async (dirHandle) => {
+  const processFolderFilesFromHandle = async (dirHandle) => {
     const files = [];
     console.log('🔍 Iniciando procesamiento de archivos de carpeta:', dirHandle.name);
     
@@ -186,7 +294,6 @@ function UploadView() {
       
       const healthCheck = await fetch(`${getBackendUrl()}/api/drive/status`, {
         method: 'GET',
-        headers: { 'Origin': 'http://localhost:3000' },
         signal: AbortSignal.timeout(10000) // 10 segundos timeout
       });
       
@@ -298,7 +405,7 @@ function UploadView() {
     try {
       // Recopilar todos los archivos de la carpeta
       console.log('📁 Recopilando archivos de la carpeta...');
-      const files = await processFolderFiles(selectedFolder);
+      const files = await processFolderFilesFromHandle(selectedFolder);
       
       if (files.length === 0) {
         setMessage('❌ No se encontraron archivos PDF o EPUB en la carpeta seleccionada.');
@@ -445,7 +552,6 @@ function UploadView() {
       
       const healthCheck = await fetch(`${getBackendUrl()}/api/drive/status`, {
         method: 'GET',
-        headers: { 'Origin': 'http://localhost:3000' },
         signal: AbortSignal.timeout(10000)
       });
       
@@ -586,9 +692,7 @@ function UploadView() {
           </Button>
           
           <Button 
-            variant="accent" 
-            size="large" 
-            icon="📁"
+            variant="accent" size="large" icon="📁"
             onClick={() => setUploadMode('folder')}
             className={uploadMode === 'folder' ? 'active-mode' : ''}
           >
@@ -621,11 +725,12 @@ function UploadView() {
         >
           📚 LIBROS EN ZIP
         </button>
-        <button 
-          className={`mode-button ${uploadMode === 'folder' ? 'active' : ''}`}
+        <button
+          variant="accent" size="large" icon="📁"
           onClick={() => setUploadMode('folder')}
+          className={`mode-button ${uploadMode === 'folder' ? 'active' : ''}`}          
         >
-          📁 POR CARPETA LOCAL
+          POR CARPETA LOCAL
         </button>
         <button 
           className={`mode-button ${uploadMode === 'drive-folder' ? 'active' : ''}`}

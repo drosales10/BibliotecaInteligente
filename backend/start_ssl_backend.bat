@@ -21,7 +21,7 @@ REM Verificar si existen certificados SSL
 if not exist "ssl\cert.pem" (
     echo 📜 Generando certificados SSL...
     echo.
-    python generate_ssl.py
+    python -c "from ssl_config import generate_self_signed_cert; import sys; sys.exit(0 if generate_self_signed_cert() else 1)"
     if errorlevel 1 (
         echo.
         echo ❌ Error generando certificados SSL

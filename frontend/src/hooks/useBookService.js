@@ -2,9 +2,6 @@ import { useCallback } from 'react';
 import { useAppMode } from '../contexts/AppModeContext';
 import { getBackendUrl, checkBackendHealth } from '../config/api';
 
-// URL base del backend (se actualiza automáticamente)
-const BACKEND_URL = getBackendUrl();
-
 export const useBookService = () => {
   const { appMode, isLocalMode, isDriveMode } = useAppMode();
 
@@ -16,8 +13,11 @@ export const useBookService = () => {
         throw new Error('Backend no disponible');
       }
 
+      // Obtener la URL del backend dinámicamente
+      const backendUrl = getBackendUrl();
+
       if (isLocalMode) {
-        let url = `${BACKEND_URL}/api/books/`;
+        let url = backendUrl ? `${backendUrl}/api/books/` : '/api/books/';
         const params = new URLSearchParams();
         if (category) params.append('category', category);
         if (search) params.append('search', search);
@@ -32,7 +32,7 @@ export const useBookService = () => {
         const data = await response.json();
         return data;
       } else if (isDriveMode) {
-        let url = `${BACKEND_URL}/api/drive/books/`;
+        let url = backendUrl ? `${backendUrl}/api/drive/books/` : '/api/drive/books/';
         const params = new URLSearchParams();
         if (category) params.append('category', category);
         if (search) params.append('search', search);
@@ -61,8 +61,12 @@ export const useBookService = () => {
       const formData = new FormData();
       formData.append('book_file', file);
 
+      // Obtener la URL del backend dinámicamente
+      const backendUrl = getBackendUrl();
+
       if (isLocalMode) {
-        const response = await fetch(`${BACKEND_URL}/api/upload-book-local/`, {
+        const url = backendUrl ? `${backendUrl}/api/upload-book-local/` : '/api/upload-book-local/';
+        const response = await fetch(url, {
           method: 'POST',
           body: formData,
         });
@@ -86,7 +90,8 @@ export const useBookService = () => {
         
         return await response.json();
       } else if (isDriveMode) {
-        const response = await fetch(`${BACKEND_URL}/api/drive/books/upload`, {
+        const url = backendUrl ? `${backendUrl}/api/drive/books/upload` : '/api/drive/books/upload';
+        const response = await fetch(url, {
           method: 'POST',
           body: formData,
         });
@@ -118,8 +123,11 @@ export const useBookService = () => {
 
   const deleteBook = useCallback(async (bookId) => {
     try {
+      // Obtener la URL del backend dinámicamente
+      const backendUrl = getBackendUrl();
+
       if (isLocalMode) {
-        const response = await fetch(`${BACKEND_URL}/api/books/${bookId}`, {
+        const response = await fetch(`${backendUrl}/api/books/${bookId}`, {
           method: 'DELETE',
         });
         if (!response.ok) {
@@ -127,7 +135,7 @@ export const useBookService = () => {
         }
         return response;
       } else if (isDriveMode) {
-        const response = await fetch(`${BACKEND_URL}/api/drive/books/${bookId}`, {
+        const response = await fetch(`${backendUrl}/api/drive/books/${bookId}`, {
           method: 'DELETE',
         });
         if (!response.ok) {
@@ -143,14 +151,17 @@ export const useBookService = () => {
 
   const getBookContent = useCallback(async (bookId) => {
     try {
+      // Obtener la URL del backend dinámicamente
+      const backendUrl = getBackendUrl();
+
       if (isLocalMode) {
-        const response = await fetch(`${BACKEND_URL}/api/books/download/${bookId}`);
+        const response = await fetch(`${backendUrl}/api/books/download/${bookId}`);
         if (!response.ok) {
           throw new Error('Error al obtener contenido del libro local');
         }
         return await response.blob(); // Cambiar de text() a blob() para archivos binarios
       } else if (isDriveMode) {
-        const response = await fetch(`${BACKEND_URL}/api/drive/books/${bookId}/content`);
+        const response = await fetch(`${backendUrl}/api/drive/books/${bookId}/content`);
         if (!response.ok) {
           throw new Error('Error al obtener contenido del libro de Drive');
         }
@@ -170,14 +181,17 @@ export const useBookService = () => {
         throw new Error('Backend no disponible');
       }
 
+      // Obtener la URL del backend dinámicamente
+      const backendUrl = getBackendUrl();
+
       if (isLocalMode) {
-        const response = await fetch(`${BACKEND_URL}/api/categories/`);
+        const response = await fetch(`${backendUrl}/api/categories/`);
         if (!response.ok) {
           throw new Error('Error al obtener categorías del servidor local');
         }
         return await response.json();
       } else if (isDriveMode) {
-        const response = await fetch(`${BACKEND_URL}/api/drive/categories/`);
+        const response = await fetch(`${backendUrl}/api/drive/categories/`);
         if (!response.ok) {
           throw new Error('Error al obtener categorías de Google Drive');
         }
@@ -194,7 +208,10 @@ export const useBookService = () => {
 
   const updateBook = useCallback(async (bookId, bookData) => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/books/${bookId}`, {
+      // Obtener la URL del backend dinámicamente
+      const backendUrl = getBackendUrl();
+
+      const response = await fetch(`${backendUrl}/api/books/${bookId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -218,7 +235,10 @@ export const useBookService = () => {
       const formData = new FormData();
       formData.append('cover_file', coverFile);
 
-      const response = await fetch(`${BACKEND_URL}/api/books/${bookId}/update-cover`, {
+      // Obtener la URL del backend dinámicamente
+      const backendUrl = getBackendUrl();
+
+      const response = await fetch(`${backendUrl}/api/books/${bookId}/update-cover`, {
         method: 'POST',
         body: formData
       });
@@ -236,7 +256,10 @@ export const useBookService = () => {
 
   const createCategory = useCallback(async (categoryName) => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/categories/`, {
+      // Obtener la URL del backend dinámicamente
+      const backendUrl = getBackendUrl();
+
+      const response = await fetch(`${backendUrl}/api/categories/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -257,7 +280,10 @@ export const useBookService = () => {
 
   const openLocalBook = useCallback(async (bookId) => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/books/${bookId}/open`);
+      // Obtener la URL del backend dinámicamente
+      const backendUrl = getBackendUrl();
+
+      const response = await fetch(`${backendUrl}/api/books/${bookId}/open`);
       
       if (!response.ok) {
         throw new Error('Error al abrir el libro');
@@ -272,7 +298,10 @@ export const useBookService = () => {
 
   const cleanupTempFiles = useCallback(async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/cleanup-temp-files`, {
+      // Obtener la URL del backend dinámicamente
+      const backendUrl = getBackendUrl();
+
+      const response = await fetch(`${backendUrl}/api/cleanup-temp-files`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

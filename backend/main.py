@@ -483,22 +483,19 @@ app = FastAPI(
 )
 
 # Configuración de CORS mejorada para dispositivos móviles
+from os import getenv
+
+allowed_origins_env = getenv("ALLOWED_ORIGINS", "").strip()
+allowed_origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()] or [
+    "http://localhost:3000",
+    "http://localhost:8001",
+    "https://localhost:3000",
+    "https://localhost:8001",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000", 
-        "http://localhost:8001",
-        "http://192.168.100.6:3000",
-        "http://192.168.100.6:8001",
-        "http://192.168.100.4:3000",
-        "http://192.168.100.4:8001",
-        "http://192.168.1.100:3000",
-        "http://192.168.1.100:8001",
-        "http://192.168.0.100:3000",
-        "http://192.168.0.100:8001",
-        # Permitir cualquier origen en desarrollo (remover en producción)
-        "*"
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -3971,4 +3968,14 @@ async def upload_folder_books_cloud(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    
+    # Leer configuración desde variables de entorno
+    host = os.getenv("HOST", "0.0.0.0").strip().strip('"').strip("'")
+    port = int(os.getenv("PORT", 8001))
+    
+    print(f"🚀 Iniciando servidor en {host}:{port}")
+    print(f"🔍 Variables de entorno:")
+    print(f"   HOST: {os.getenv('HOST', 'No configurado')}")
+    print(f"   PORT: {os.getenv('PORT', 'No configurado')}")
+    
+    uvicorn.run(app, host=host, port=port)

@@ -1,20 +1,25 @@
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
 module.exports = function(app) {
-  console.log('🔧 Configurando proxy para desarrollo...');
+  console.log('🔧 Configurando proxy para Tailscale...');
+  console.log('🌐 Backend URL:', 'https://100.81.201.68:8001');
   
   app.use(
     '/api',
     createProxyMiddleware({
-      target: 'http://localhost:8001',
+      target: 'https://100.81.201.68:8001',
       changeOrigin: true,
-      secure: false,
+      secure: false, // Permitir certificados autofirmados
       logLevel: 'debug',
-      // Sin pathRewrite - mantener la ruta completa
+      headers: {
+        'X-Forwarded-Proto': 'https',
+        'X-Forwarded-Host': '100.81.201.68',
+      },
       onError: (err, req, res) => {
         console.error('❌ Error en proxy API:', err);
         console.error('   Request URL:', req.url);
         console.error('   Request method:', req.method);
+        console.error('   Backend URL:', 'https://100.81.201.68:8001');
       },
       onProxyReq: (proxyReq, req, res) => {
         console.log('🔍 Proxy request:', req.method, req.url);
@@ -28,5 +33,5 @@ module.exports = function(app) {
     })
   );
   
-  console.log('✅ Proxy configurado para /api -> http://localhost:8001');
+  console.log('✅ Proxy configurado para /api -> https://100.81.201.68:8001');
 };

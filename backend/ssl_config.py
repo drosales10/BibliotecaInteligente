@@ -48,9 +48,10 @@ def get_ssl_context():
         print("📱 El servidor funcionará solo con HTTP (no recomendado para móviles)")
         return {}
 
-def generate_self_signed_cert():
+def generate_self_signed_cert(hostname="localhost"):
     """
     Genera certificados SSL autofirmados usando OpenSSL
+    Acepta un hostname personalizado para Tailscale
     """
     try:
         import subprocess
@@ -66,14 +67,14 @@ def generate_self_signed_cert():
             "openssl", "genrsa", "-out", "ssl/key.pem", "2048"
         ], check=True, capture_output=True)
         
-        # Generar certificado autofirmado
+        # Generar certificado autofirmado con hostname personalizado
         subprocess.run([
             "openssl", "req", "-new", "-x509", "-key", "ssl/key.pem", 
             "-out", "ssl/cert.pem", "-days", "365", "-subj",
-            "/C=ES/ST=Madrid/L=Madrid/O=Biblioteca Inteligente/CN=localhost"
+            f"/C=ES/ST=Madrid/L=Madrid/O=Biblioteca Inteligente/CN={hostname}"
         ], check=True, capture_output=True)
         
-        print("✅ Certificados SSL autofirmados generados exitosamente")
+        print(f"✅ Certificados SSL autofirmados generados exitosamente para {hostname}")
         print("🔒 El servidor ahora soporta HTTPS")
         return True
         
