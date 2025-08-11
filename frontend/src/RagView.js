@@ -137,19 +137,27 @@ function RagView() {
       return;
     }
 
-    const newChatHistory = [...chatHistory, { sender: 'user', text: currentQuery }];
+    // Guardar la consulta actual antes de limpiarla
+    const queryToSend = currentQuery.trim();
+    
+    const newChatHistory = [...chatHistory, { sender: 'user', text: queryToSend }];
     setChatHistory(newChatHistory);
     setCurrentQuery('');
     setIsLoading(true);
 
     try {
       const apiUrl = getBackendUrl();
+      const requestBody = { query: queryToSend, book_id: bookId };
+      console.log('🚀 Enviando consulta RAG:', requestBody);
+      console.log('🔍 queryToSend:', queryToSend);
+      console.log('🔍 bookId:', bookId);
+      
       const response = await fetch(`${apiUrl}/rag/query/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ query: currentQuery, book_id: bookId }),
+        body: JSON.stringify(requestBody),
       });
 
       if (response.ok) {
@@ -344,7 +352,7 @@ function RagView() {
 
       {bookId && (
         <div className="chat-section">
-          <h3>Conversación sobre el libro</h3>
+          <h3>💬 Conversación sobre el libro</h3>
           <div className="chat-history">
             {chatHistory.map((msg, index) => (
               <div key={index} className={`chat-message ${msg.sender}`}>
@@ -361,7 +369,7 @@ function RagView() {
               disabled={isLoading}
             />
             <button type="submit" disabled={isLoading || !currentQuery.trim()}>
-              Enviar
+              {isLoading ? '⏳' : '🚀'}
             </button>
           </form>
         </div>

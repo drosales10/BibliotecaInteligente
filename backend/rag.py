@@ -91,8 +91,10 @@ def check_book_exists(book_id: str) -> bool:
 
 def get_embedding(text):
     """Generates an embedding for the given text with rate limiting."""
+    print(f"🔍 get_embedding llamado con texto: '{text}' (longitud: {len(text)})")
     if not text.strip():
-        return [] # Return empty list for empty text
+        print(f"❌ Texto vacío detectado en get_embedding: '{text}'")
+        return None  # Return None for empty text
     
     try:
         # Usar rate limiter para embeddings
@@ -103,10 +105,10 @@ def get_embedding(text):
         
     except RateLimitExceeded as e:
         print(f"⚠️ Rate limit alcanzado para embeddings: {e}")
-        return []  # Retornar lista vacía en caso de rate limit
+        raise  # Re-lanzar la excepción para manejarla apropiadamente
     except Exception as e:
         print(f"❌ Error generando embedding: {e}")
-        return []
+        raise  # Re-lanzar la excepción para manejarla apropiadamente
 
 def extract_text_from_pdf(file_path: str) -> str:
     """Extracts text from a PDF file."""
@@ -178,31 +180,53 @@ async def process_book_for_rag(file_path: str, book_id: str):
 
     print(f"📝 Generando embeddings para {len(chunks)} chunks...")
     
+    successful_chunks = 0
     for i, chunk in enumerate(chunks):
-        embedding = get_embedding(chunk) # No await here
-        if embedding: # Only add if embedding is not empty
-            collection.add(
-                embeddings=[embedding],
-                documents=[chunk],
-                metadatas=[{"book_id": book_id, "chunk_index": i}],
-                ids=[f"{book_id}_chunk_{i}"]
-            )
+        try:
+            embedding = get_embedding(chunk) # No await here
+            if embedding is not None: # Only add if embedding is not None
+                collection.add(
+                    embeddings=[embedding],
+                    documents=[chunk],
+                    metadatas=[{"book_id": book_id, "chunk_index": i}],
+                    ids=[f"{book_id}_chunk_{i}"]
+                )
+                successful_chunks += 1
+        except RateLimitExceeded as e:
+            print(f"⚠️ Rate limit alcanzado para chunk {i}: {e}")
+            # Continuar con el siguiente chunk en lugar de fallar completamente
+            continue
+        except Exception as e:
+            print(f"❌ Error procesando chunk {i}: {e}")
+            # Continuar con el siguiente chunk en lugar de fallar completamente
+            continue
     
-    print(f"✅ Procesado {len(chunks)} chunks para libro ID: {book_id}")
+    print(f"✅ Procesado {successful_chunks}/{len(chunks)} chunks para libro ID: {book_id}")
     
     # Obtener estadísticas actualizadas
     stats = get_rag_stats()
     print(f"📊 Estadísticas RAG actualizadas: {stats}")
     
-    return {"status": "processed", "chunks_processed": len(chunks), "stats": stats}
+    return {"status": "processed", "chunks_processed": successful_chunks, "total_chunks": len(chunks), "stats": stats}
 
 async def query_rag(query: str, book_id: str):
     """Queries the RAG system for answers based on the book content with rate limiting."""
     try:
+        print(f"🔍 Consulta recibida: '{query}' (longitud: {len(query)})")
+        print(f"🔍 Book ID recibido: {book_id}")
+        
         # Generar embedding de la consulta con rate limiting
-        query_embedding = get_embedding(query)
-        if not query_embedding:
-            return "No puedo procesar una consulta vacía."
+        try:
+            query_embedding = get_embedding(query)
+            print(f"🔍 Embedding generado: {len(query_embedding) if query_embedding else 0} dimensiones")
+            
+            if query_embedding is None:
+                print(f"❌ Query vacía detectada: '{query}'")
+                return "No puedo procesar una consulta vacía."
+                
+        except RateLimitExceeded as e:
+            print(f"⚠️ Rate limit alcanzado para embedding de consulta: {e}")
+            return f"⚠️ El sistema está ocupado procesando otras consultas. Por favor, espera un momento e intenta de nuevo. ({e})"
 
         # Buscar chunks relevantes
         results = collection.query(

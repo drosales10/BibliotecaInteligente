@@ -3986,7 +3986,6 @@ async def upload_book_for_rag(file: UploadFile = File(...), db: Session = Depend
     """Sube un libro para procesamiento RAG y conversación con IA. 
     Si el libro no existe en la biblioteca, lo agrega automáticamente."""
     import uuid
-    from ai_analysis import analyze_book_content
     
     rag_book_id = str(uuid.uuid4())
     file_location = os.path.join(STATIC_TEMP_DIR, f"{rag_book_id}_{file.filename}")
@@ -4068,14 +4067,97 @@ async def upload_book_for_rag(file: UploadFile = File(...), db: Session = Depend
             os.remove(file_location)
         raise HTTPException(status_code=500, detail=f"Error al procesar el libro para RAG: {e}")
 
+async def analyze_book_content(file_path: str) -> dict:
+    """Analiza el contenido de un archivo de libro para extraer título, autor y categoría."""
+    try:
+        # Extraer texto del archivo según su tipo
+        file_extension = os.path.splitext(file_path)[1].lower()
+        text = ""
+        
+        if file_extension == '.pdf':
+            # Usar la función existente de procesamiento de PDF
+            doc = fitz.open(file_path)
+            max_pages = min(len(doc), 10)
+            for i in range(max_pages):
+                text += doc.load_page(i).get_text("text", sort=True)
+            doc.close()
+            
+        elif file_extension == '.epub':
+            # Usar la función existente de procesamiento de EPUB
+            book = epub.read_epub(file_path)
+            for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
+                soup = BeautifulSoup(item.get_content(), 'html.parser')
+                text += soup.get_text(separator=' ') + "\n"
+                if len(text) > 4500: 
+                    break
+        else:
+            # Para otros tipos de archivo, intentar leer como texto
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    text = f.read(4000)  # Leer solo los primeros 4000 caracteres
+            except UnicodeDecodeError:
+                # Si falla UTF-8, intentar con otras codificaciones
+                try:
+                    with open(file_path, 'r', encoding='latin-1') as f:
+                        text = f.read(4000)
+                except:
+                    text = ""
+        
+        if len(text.strip()) < 100:
+            raise ValueError("No se pudo extraer suficiente texto del archivo para su análisis")
+        
+        # Usar la función existente de análisis con Gemini
+        book_info = analyze_with_gemini(text)
+        
+        # Agregar información de portada si está disponible
+        cover_image_url = None
+        try:
+            if file_extension == '.pdf':
+                # Buscar portada en PDF
+                doc = fitz.open(file_path)
+                if len(doc) > 0:
+                    page_images = doc.get_page_images(0)
+                    if page_images:
+                        # Aquí podrías guardar la imagen y obtener la URL
+                        # Por ahora, solo indicamos que se encontró una imagen
+                        cover_image_url = "portada_detectada"
+                doc.close()
+            elif file_extension == '.epub':
+                # Buscar portada en EPUB
+                book = epub.read_epub(file_path)
+                cover_items = list(book.get_items_of_type(ebooklib.ITEM_COVER))
+                if cover_items:
+                    cover_image_url = "portada_detectada"
+        except Exception as e:
+            print(f"⚠️ Error al buscar portada: {e}")
+            cover_image_url = None
+        
+        book_info["cover_image_url"] = cover_image_url
+        return book_info
+        
+    except Exception as e:
+        print(f"❌ Error al analizar contenido del libro: {e}")
+        # Retornar valores por defecto en caso de error
+        return {
+            "title": "Título no detectado",
+            "author": "Autor no detectado", 
+            "category": "Sin categoría",
+            "cover_image_url": None
+        }
+
 @app.post("/rag/query/", response_model=schemas.RagQueryResponse)
 async def query_rag_endpoint(query_data: schemas.RagQuery):
     """Consulta la IA sobre el contenido de un libro procesado."""
     try:
+        print(f"🔍 Endpoint /rag/query/ recibió: {query_data}")
+        print(f"🔍 Query: '{query_data.query}' (tipo: {type(query_data.query)})")
+        print(f"🔍 Book ID: '{query_data.book_id}' (tipo: {type(query_data.book_id)})")
+        
         import rag
         response_text = await rag.query_rag(query_data.query, query_data.book_id)
         return {"response": response_text}
     except Exception as e:
+        print(f"❌ Error en endpoint /rag/query/: {e}")
         raise HTTPException(status_code=500, detail=f"Error al consultar RAG: {e}")
 
 @app.get("/rag/status")

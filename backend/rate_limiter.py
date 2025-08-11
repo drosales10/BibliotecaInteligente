@@ -288,21 +288,21 @@ class RateLimitExceeded(Exception):
 
 # Configuraciones específicas por proveedor
 GEMINI_CONFIG = RateLimitConfig(
-    max_concurrent_calls=2,  # Gemini free tier: 2 RPM (requests per minute)
-    max_calls_per_minute=2,  # Conservador para free tier
-    max_calls_per_hour=100,  # Límite razonable para uso normal
-    retry_delay=2.0,
+    max_concurrent_calls=5,  # Gemini free tier: 5 RPM (requests per minute)
+    max_calls_per_minute=15,  # Más permisivo para free tier
+    max_calls_per_hour=300,  # Límite razonable para uso normal
+    retry_delay=1.0,
     max_retries=3,
-    backoff_multiplier=2.0
+    backoff_multiplier=1.5
 )
 
 GEMINI_EMBEDDINGS_CONFIG = RateLimitConfig(
-    max_concurrent_calls=3,  # Embeddings pueden ser más agresivos
-    max_calls_per_minute=10,  # Más llamadas para embeddings
-    max_calls_per_hour=500,
-    retry_delay=1.0,
+    max_concurrent_calls=5,  # Embeddings pueden ser más agresivos
+    max_calls_per_minute=30,  # Mucho más permisivo para embeddings
+    max_calls_per_hour=1000,
+    retry_delay=0.5,
     max_retries=5,
-    backoff_multiplier=1.5
+    backoff_multiplier=1.2
 )
 
 # Rate limiters globales
