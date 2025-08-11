@@ -4160,6 +4160,20 @@ async def query_rag_endpoint(query_data: schemas.RagQuery):
         print(f"❌ Error en endpoint /rag/query/: {e}")
         raise HTTPException(status_code=500, detail=f"Error al consultar RAG: {e}")
 
+@app.post("/rag/query-global/", response_model=schemas.RagQueryResponse)
+async def query_rag_global_endpoint(query_data: schemas.RagGlobalQuery):
+    """Consulta la IA sobre el contenido de TODOS los libros procesados."""
+    try:
+        print(f"🌍 Endpoint /rag/query-global/ recibió: {query_data}")
+        print(f"🌍 Query global: '{query_data.query}' (tipo: {type(query_data.query)})")
+        
+        import rag
+        response_text = await rag.query_rag_global(query_data.query)
+        return {"response": response_text}
+    except Exception as e:
+        print(f"❌ Error en endpoint /rag/query-global/: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al consultar RAG global: {e}")
+
 @app.get("/rag/status")
 async def get_rag_status():
     """Obtiene el estado y estadísticas del sistema RAG."""

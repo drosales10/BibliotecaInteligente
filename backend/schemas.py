@@ -90,6 +90,9 @@ class RagQuery(BaseModel):
     query: str
     book_id: str
 
+class RagGlobalQuery(BaseModel):
+    query: str
+
 class RagQueryResponse(BaseModel):
     response: str
 

@@ -1021,3 +1021,120 @@
   background: #4a4a4a;
   color: #b0b0b0;
 }
+
+/* Estilos para la sección de consultas globales */
+.global-chat-section {
+  margin-top: 2rem;
+  padding: 2rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 15px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.global-chat-section h3 {
+  color: white;
+  margin-bottom: 0.5rem;
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+.global-chat-description {
+  color: rgba(255, 255, 255, 0.9);
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.global-chat-history {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.global-chat-history .chat-message {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.global-chat-history .chat-message.user {
+  background: rgba(103, 126, 234, 0.3);
+  border-color: rgba(103, 126, 234, 0.5);
+}
+
+.global-chat-history .chat-message.gemini {
+  background: rgba(118, 75, 162, 0.3);
+  border-color: rgba(118, 75, 162, 0.5);
+}
+
+.global-chat-history .chat-message strong {
+  color: white;
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.global-chat-history .chat-message:not(.user) strong {
+  color: #f0f0f0;
+}
+
+.global-chat-history .chat-message:last-child {
+  margin-bottom: 0;
+}
+
+/* Estilos responsivos para consultas globales */
+@media (max-width: 768px) {
+  .global-chat-section {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+  }
+  
+  .global-chat-section h3 {
+    font-size: 1.3rem;
+  }
+  
+  .global-chat-description {
+    font-size: 0.9rem;
+  }
+  
+  .global-chat-history {
+    max-height: 300px;
+    padding: 0.75rem;
+  }
+}
+
+/* Modo oscuro para consultas globales */
+@media (prefers-color-scheme: dark) {
+  .global-chat-section {
+    background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .global-chat-history {
+    background: rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .global-chat-history .chat-message {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .global-chat-history .chat-message.user {
+    background: rgba(103, 126, 234, 0.2);
+    border-color: rgba(103, 126, 234, 0.3);
+  }
+  
+  .global-chat-history .chat-message.gemini {
+    background: rgba(118, 75, 162, 0.2);
+    border-color: rgba(118, 75, 162, 0.3);
+  }
+}

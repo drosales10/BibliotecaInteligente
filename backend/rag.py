@@ -265,3 +265,78 @@ Respuesta:"""
     except Exception as e:
         print(f"❌ Error en consulta RAG: {e}")
         return f"❌ Ocurrió un error al procesar tu consulta: {str(e)}"
+
+async def query_rag_global(query: str):
+    """Queries the RAG system for answers based on ALL books content with rate limiting."""
+    try:
+        print(f"🔍 Consulta global recibida: '{query}' (longitud: {len(query)})")
+        
+        # Generar embedding de la consulta con rate limiting
+        try:
+            query_embedding = get_embedding(query)
+            print(f"🔍 Embedding global generado: {len(query_embedding) if query_embedding else 0} dimensiones")
+            
+            if query_embedding is None:
+                print(f"❌ Query vacía detectada: '{query}'")
+                return "No puedo procesar una consulta vacía."
+                
+        except RateLimitExceeded as e:
+            print(f"⚠️ Rate limit alcanzado para embedding de consulta global: {e}")
+            return f"⚠️ El sistema está ocupado procesando otras consultas. Por favor, espera un momento e intenta de nuevo. ({e})"
+
+        # Buscar chunks relevantes en TODA la base de datos (sin filtro de book_id)
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=10,  # Más chunks para contexto global
+            # Sin where clause = búsqueda en toda la colección
+        )
+
+        relevant_chunks = [doc for doc in results['documents'][0]]
+        if not relevant_chunks:
+            return "No encontré información relevante en ninguno de los libros para responder tu pregunta."
+            
+        # Obtener metadatos para identificar de qué libros provienen los chunks
+        metadatas = results['metadatas'][0]
+        book_sources = set()
+        for metadata in metadatas:
+            if metadata and 'book_id' in metadata:
+                book_sources.add(metadata['book_id'])
+        
+        context = "\n\n".join(relevant_chunks)
+        
+        # Crear prompt específico para consultas globales
+        prompt = f"""Eres un asistente bibliotecario experto que responde preguntas basándose en el contenido de múltiples libros.
+
+INSTRUCCIONES ESPECÍFICAS:
+1. Prioriza SIEMPRE la información del Contexto proporcionado
+2. Si la información del Contexto no es suficiente, puedes usar tus conocimientos generales
+3. Responde SIEMPRE en español
+4. Menciona de qué libros o temas proviene la información cuando sea relevante
+5. Proporciona respuestas completas y bien estructuradas
+
+Contexto (extraído de {len(book_sources)} libros diferentes):
+{context}
+
+Pregunta: {query}
+
+Respuesta:"""
+
+        # Usar rate limiter para la generación de respuesta
+        def _generate_response():
+            model = genai.GenerativeModel(GENERATION_MODEL)
+            response = model.generate_content(prompt)
+            return response.text
+
+        response_text = call_gemini_with_limit_sync(_generate_response)
+        
+        # Agregar información sobre las fuentes
+        if book_sources:
+            response_text += f"\n\n📚 **Fuentes consultadas**: Información extraída de {len(book_sources)} libros diferentes en la biblioteca."
+        
+        return response_text
+        
+    except RateLimitExceeded as e:
+        return f"⚠️ El sistema está ocupado procesando otras consultas. Por favor, espera un momento e intenta de nuevo. ({e})"
+    except Exception as e:
+        print(f"❌ Error en consulta RAG global: {e}")
+        return f"❌ Ocurrió un error al procesar tu consulta global: {str(e)}"

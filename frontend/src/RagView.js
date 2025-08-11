@@ -13,6 +13,11 @@ function RagView() {
   const [libraryRagStats, setLibraryRagStats] = useState(null);
   const [libraryMetrics, setLibraryMetrics] = useState(null);
   const [isCheckingRag, setIsCheckingRag] = useState(false);
+  
+  // Estados para consultas globales
+  const [globalChatHistory, setGlobalChatHistory] = useState([]);
+  const [globalCurrentQuery, setGlobalCurrentQuery] = useState('');
+  const [isGlobalLoading, setIsGlobalLoading] = useState(false);
 
   // Verificar estado de RAG al cargar el componente
   useEffect(() => {
@@ -171,6 +176,47 @@ function RagView() {
       setChatHistory([...newChatHistory, { sender: 'gemini', text: 'Error de conexión al consultar.' }]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleGlobalQuerySubmit = async (event) => {
+    event.preventDefault();
+    if (!globalCurrentQuery.trim()) {
+      return;
+    }
+
+    // Guardar la consulta actual antes de limpiarla
+    const queryToSend = globalCurrentQuery.trim();
+    
+    const newGlobalChatHistory = [...globalChatHistory, { sender: 'user', text: queryToSend }];
+    setGlobalChatHistory(newGlobalChatHistory);
+    setGlobalCurrentQuery('');
+    setIsGlobalLoading(true);
+
+    try {
+      const apiUrl = getBackendUrl();
+      const requestBody = { query: queryToSend };
+      console.log('🌍 Enviando consulta RAG global:', requestBody);
+      
+      const response = await fetch(`${apiUrl}/rag/query-global/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setGlobalChatHistory([...newGlobalChatHistory, { sender: 'gemini', text: result.response }]);
+      } else {
+        const result = await response.json();
+        setGlobalChatHistory([...newGlobalChatHistory, { sender: 'gemini', text: `Error: ${result.detail || 'No se pudo obtener respuesta.'}` }]);
+      }
+    } catch (error) {
+      setGlobalChatHistory([...newGlobalChatHistory, { sender: 'gemini', text: 'Error de conexión al consultar globalmente.' }]);
+    } finally {
+      setIsGlobalLoading(false);
     }
   };
 
@@ -374,6 +420,35 @@ function RagView() {
           </form>
         </div>
       )}
+
+      {/* Nueva sección para consultas globales */}
+      <div className="global-chat-section">
+        <h3>🌍 Consulta Global - Todos los Libros</h3>
+        <p className="global-chat-description">
+          Haz preguntas sobre cualquier tema y la IA buscará en el contenido de todos los libros procesados con RAG.
+        </p>
+        
+        <div className="global-chat-history">
+          {globalChatHistory.map((msg, index) => (
+            <div key={index} className={`chat-message ${msg.sender}`}>
+              <strong>{msg.sender === 'user' ? 'Tú' : 'Gemini'}:</strong> {msg.text}
+            </div>
+          ))}
+        </div>
+        
+        <form onSubmit={handleGlobalQuerySubmit} className="chat-input-form">
+          <input
+            type="text"
+            value={globalCurrentQuery}
+            onChange={(e) => setGlobalCurrentQuery(e.target.value)}
+            placeholder="Haz una pregunta sobre cualquier tema de todos los libros..."
+            disabled={isGlobalLoading}
+          />
+          <button type="submit" disabled={isGlobalLoading || !globalCurrentQuery.trim()}>
+            {isGlobalLoading ? '⏳' : '🌍'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
