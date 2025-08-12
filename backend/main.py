@@ -25,6 +25,7 @@ import threading
 import uuid
 from googleapiclient.http import MediaIoBaseDownload
 import hashlib
+from datetime import datetime
 
 import crud, models, database, schemas
 import cover_search
@@ -35,13 +36,24 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # --- Configuración Inicial ---
+# Cargar variables de entorno desde múltiples ubicaciones posibles
+# Primero intentar desde la raíz del proyecto
 load_dotenv(dotenv_path='../.env')
+# Luego desde el directorio backend
+load_dotenv(dotenv_path='.env')
+# También intentar desde el directorio actual sin ruta específica
+load_dotenv()
 API_KEY = os.getenv("GEMINI_API_KEY")
 print(f"🔑 Clave de API cargada: {API_KEY[:10]}..." if API_KEY else "❌ No se encontró la clave de API")
 if not API_KEY: 
     print("⚠️  ADVERTENCIA: No se encontró la GEMINI_API_KEY. La funcionalidad de IA estará limitada.")
     API_KEY = "dummy_key"  # Clave temporal para evitar errores
 genai.configure(api_key=API_KEY)
+
+# Configuración de la ruta de libros
+BOOKS_PATH = os.getenv("BOOKS_PATH", "books").strip()  # Eliminar espacios extra
+print(f"📚 Ruta de libros configurada: {BOOKS_PATH}")
+os.makedirs(BOOKS_PATH, exist_ok=True)
 models.Base.metadata.create_all(bind=database.engine)
 
 # Rate limiting para llamadas a APIs de IA
@@ -523,6 +535,7 @@ STATIC_TEMP_DIR = "temp_books"
 os.makedirs(STATIC_TEMP_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/temp_books", StaticFiles(directory=STATIC_TEMP_DIR), name="temp_books")
+# NOTA: El montaje de /books se mueve al final para evitar conflictos con las rutas de la API
 
 def get_db():
     db = database.SessionLocal()
@@ -535,13 +548,18 @@ async def upload_book_local(db: Session = Depends(get_db), book_file: UploadFile
     """
     Sube un libro para almacenamiento local
     """
+    print(f"📥 Iniciando upload local para: {book_file.filename}")
+    print(f"📚 BOOKS_PATH configurado como: {BOOKS_PATH}")
+    print(f"📁 BOOKS_PATH absoluto: {os.path.abspath(BOOKS_PATH)}")
     # Crear archivo temporal para procesamiento
     temp_file_path = None
     try:
         # Crear archivo temporal
         temp_dir = "temp_processing"
+        print(f"📂 Creando directorio temporal: {os.path.abspath(temp_dir)}")
         os.makedirs(temp_dir, exist_ok=True)
         temp_file_path = os.path.join(temp_dir, f"temp_{uuid.uuid4()}_{book_file.filename}")
+        print(f"📄 Archivo temporal será: {os.path.abspath(temp_file_path)}")
         
         # Guardar archivo temporalmente para procesamiento
         with open(temp_file_path, "wb") as buffer:
@@ -592,9 +610,12 @@ async def upload_book_local(db: Session = Depends(get_db), book_file: UploadFile
             )
         
         # Mover archivo a ubicación permanente
-        permanent_dir = "books"
+        permanent_dir = BOOKS_PATH
+        print(f"📚 Directorio permanente: {os.path.abspath(permanent_dir)}")
         os.makedirs(permanent_dir, exist_ok=True)
         permanent_file_path = os.path.join(permanent_dir, f"{uuid.uuid4()}_{book_file.filename}")
+        print(f"🎯 Ruta final del archivo: {os.path.abspath(permanent_file_path)}")
+        print(f"📋 Moviendo de {temp_file_path} a {permanent_file_path}")
         shutil.move(temp_file_path, permanent_file_path)
         
         # Crear registro en base de datos
@@ -1887,7 +1908,7 @@ async def upload_folder_books_local(
 def cleanup_orphaned_files():
     """Limpia archivos en el directorio de libros que no están referenciados en la base de datos"""
     try:
-        books_dir = "books"
+        books_dir = BOOKS_PATH
         if not os.path.exists(books_dir):
             return
         
@@ -2060,7 +2081,7 @@ def check_books_health(db: Session = Depends(get_db)):
                 })
         
         # Verificar archivos huérfanos en el directorio de libros
-        books_dir = "books"
+        books_dir = BOOKS_PATH
         if os.path.exists(books_dir):
             files_in_dir = set()
             for file in os.listdir(books_dir):
@@ -2534,30 +2555,59 @@ def sync_book_to_drive(book_data: dict, db: Session = Depends(get_db)):
     Sincroniza un libro desde local a Google Drive y elimina el archivo local
     """
     try:
-        from google_drive_manager import get_drive_manager
-        drive_manager = get_drive_manager()
+        print(f"🔄 Iniciando sincronización de libro: {book_data}")
         
-        if not drive_manager.service:
-            raise HTTPException(status_code=503, detail="Google Drive no está configurado")
-        
+        # Validar datos de entrada
         book_id = book_data.get('book_id')
         title = book_data.get('title')
         author = book_data.get('author')
         category = book_data.get('category')
         
+        print(f"📊 Datos recibidos: book_id={book_id}, title={title}, author={author}, category={category}")
+        
         if not all([book_id, title, author, category]):
-            raise HTTPException(status_code=400, detail="Faltan datos requeridos para la sincronización")
+            error_msg = f"Faltan datos requeridos: book_id={book_id}, title={title}, author={author}, category={category}"
+            print(f"❌ {error_msg}")
+            raise HTTPException(status_code=400, detail=error_msg)
         
         # Obtener el libro de la base de datos local
+        print(f"🔍 Buscando libro en base de datos: {book_id}")
         book = crud.get_book(db, book_id)
         if not book:
-            raise HTTPException(status_code=404, detail="Libro no encontrado en la base de datos local")
+            error_msg = f"Libro no encontrado en la base de datos local: {book_id}"
+            print(f"❌ {error_msg}")
+            raise HTTPException(status_code=404, detail=error_msg)
+        
+        print(f"✅ Libro encontrado: {book.title} - {book.author}")
         
         # Verificar si el archivo existe
-        if not book.file_path or not os.path.exists(book.file_path):
-            raise HTTPException(status_code=404, detail="Archivo del libro no encontrado")
+        if not book.file_path:
+            error_msg = f"El libro no tiene ruta de archivo configurada: {book_id}"
+            print(f"❌ {error_msg}")
+            raise HTTPException(status_code=404, detail=error_msg)
+            
+        if not os.path.exists(book.file_path):
+            error_msg = f"Archivo del libro no encontrado en: {book.file_path}"
+            print(f"❌ {error_msg}")
+            raise HTTPException(status_code=404, detail=error_msg)
+        
+        print(f"✅ Archivo encontrado: {book.file_path}")
+        print(f"📏 Tamaño del archivo: {os.path.getsize(book.file_path)} bytes")
+        
+        # Obtener Google Drive Manager
+        print("🔍 Obteniendo Google Drive Manager...")
+        from google_drive_manager import get_drive_manager
+        drive_manager = get_drive_manager()
+        
+        if not drive_manager.service:
+            error_msg = "Google Drive no está configurado"
+            print(f"❌ {error_msg}")
+            raise HTTPException(status_code=503, detail=error_msg)
+        
+        print("✅ Google Drive Manager obtenido")
         
         # Subir a Google Drive
+        print(f"🔄 Subiendo libro a Google Drive: {title}")
         result = drive_manager.upload_book_to_drive(
             book.file_path,
             title,
@@ -2565,44 +2615,86 @@ def sync_book_to_drive(book_data: dict, db: Session = Depends(get_db)):
             category
         )
         
-        if result['success']:
-            # Eliminar archivo local después de subir exitosamente a Drive
-            try:
-                if os.path.exists(book.file_path):
-                    os.remove(book.file_path)
-                    print(f"Archivo local eliminado: {book.file_path}")
-                
-                # Eliminar imagen de portada local si existe
-                if book.cover_image_url and os.path.exists(book.cover_image_url):
-                    os.remove(book.cover_image_url)
-                    print(f"Imagen de portada local eliminada: {book.cover_image_url}")
-                    
-            except OSError as e:
-                print(f"Error al eliminar archivos locales: {e}")
-            
-            # Actualizar el libro en la base de datos para marcar que está solo en Drive
-            crud.update_book_sync_status(
+        print(f"📊 Resultado de la subida: {result}")
+        
+        if not result['success']:
+            error_msg = f"Error al subir a Drive: {result['error']}"
+            print(f"❌ {error_msg}")
+            raise HTTPException(status_code=500, detail=error_msg)
+        
+        print("✅ Libro subido exitosamente a Google Drive")
+        
+        # Actualizar el libro en la base de datos
+        print("🔄 Actualizando estado en la base de datos...")
+        try:
+            updated_book = crud.update_book_sync_status(
                 db, 
                 book_id=book_id, 
                 synced_to_drive=True, 
                 drive_file_id=result['file_id'],
-                remove_local_file=True  # Marcar que el archivo local fue eliminado
+                remove_local_file=False  # No eliminar por ahora para evitar problemas
             )
             
-            return {
-                "success": True,
-                "message": "Libro sincronizado exitosamente a Google Drive y eliminado de local",
-                "drive_file_id": result['file_id'],
-                "drive_file_path": result['file_path'],
-                "local_file_removed": True
+            if not updated_book:
+                error_msg = "Error al actualizar estado en la base de datos"
+                print(f"❌ {error_msg}")
+                raise HTTPException(status_code=500, detail=error_msg)
+                
+            print("✅ Estado actualizado en la base de datos")
+            
+        except Exception as db_error:
+            error_msg = f"Error al actualizar base de datos: {str(db_error)}"
+            print(f"❌ {error_msg}")
+            raise HTTPException(status_code=500, detail=error_msg)
+        
+        # Eliminar archivo local después de actualizar la base de datos
+        print("🔄 Eliminando archivo local...")
+        try:
+            if os.path.exists(book.file_path):
+                os.remove(book.file_path)
+                print(f"✅ Archivo local eliminado: {book.file_path}")
+            else:
+                print(f"⚠️ Archivo local ya no existe: {book.file_path}")
+                
+            # Eliminar imagen de portada local si existe
+            if book.cover_image_url and os.path.exists(book.cover_image_url):
+                os.remove(book.cover_image_url)
+                print(f"✅ Imagen de portada local eliminada: {book.cover_image_url}")
+            elif book.cover_image_url:
+                print(f"⚠️ Imagen de portada no encontrada: {book.cover_image_url}")
+                
+        except OSError as e:
+            print(f"⚠️ Error al eliminar archivos locales: {e}")
+            # No fallar la sincronización por errores de limpieza
+        
+        # Respuesta exitosa
+        response_data = {
+            "success": True,
+            "message": "Libro sincronizado exitosamente a Google Drive",
+            "drive_file_id": result['file_id'],
+            "drive_file_path": result['file_path'],
+            "local_file_removed": True,
+            "book_info": {
+                "id": book_id,
+                "title": title,
+                "author": author,
+                "category": category
             }
-        else:
-            raise HTTPException(status_code=500, detail=f"Error al subir a Drive: {result['error']}")
+        }
+        
+        print(f"✅ Sincronización completada exitosamente: {response_data}")
+        return response_data
         
     except HTTPException:
+        # Re-lanzar excepciones HTTP
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al sincronizar libro: {str(e)}")
+        error_msg = f"Error inesperado al sincronizar libro: {str(e)}"
+        print(f"❌ {error_msg}")
+        print(f"🔍 Traceback completo:")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @app.get("/api/drive/status")
 def check_drive_status():
@@ -4273,9 +4365,21 @@ async def process_existing_book_for_rag(book_id: int, db: Session = Depends(get_
         temp_file = False
         
         # Determinar la ruta del archivo
-        if book.file_path and os.path.exists(book.file_path):
-            # Archivo local disponible
-            file_path = book.file_path
+        if book.file_path:
+            # Verificar si es ruta absoluta o relativa
+            if os.path.isabs(book.file_path):
+                # Ruta absoluta
+                if os.path.exists(book.file_path):
+                    file_path = book.file_path
+                else:
+                    raise HTTPException(status_code=400, detail=f"Archivo no encontrado en ruta absoluta: {book.file_path}")
+            else:
+                # Ruta relativa, construir ruta completa usando BOOKS_PATH
+                absolute_path = os.path.join(BOOKS_PATH, book.file_path.replace('books\\', '').replace('books/', ''))
+                if os.path.exists(absolute_path):
+                    file_path = absolute_path
+                else:
+                    raise HTTPException(status_code=400, detail=f"Archivo no encontrado en ruta relativa: {absolute_path}")
         elif book.drive_file_id:
             # Descargar desde Google Drive
             temp_file_name = f"temp_rag_{book_id}_{book.drive_filename}"
@@ -4476,6 +4580,62 @@ async def cancel_rag_task(task_id: str):
             "status": "error",
             "message": f"Error al cancelar tarea: {str(e)}"
         }
+
+# ============================================================================
+# MONTAJE DE ARCHIVOS ESTÁTICOS (AL FINAL PARA EVITAR CONFLICTOS CON RUTAS API)
+# ============================================================================
+
+# Montar directorio de libros AL FINAL para evitar conflictos con endpoints RAG
+app.mount("/books", StaticFiles(directory=BOOKS_PATH), name="books")
+
+# ============================================================================
+# ENDPOINTS DE MONITOREO Y ESTADÍSTICAS
+# ============================================================================
+
+@app.get("/api/health")
+async def health_check():
+    """Endpoint de verificación de salud del sistema"""
+    try:
+        # Verificar conexión a la base de datos
+        db = get_db()
+        db.execute("SELECT 1")
+        
+        # Verificar estado del rate limiter
+        from rate_limiter import get_all_rate_limit_stats
+        rate_limit_stats = get_all_rate_limit_stats()
+        
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "database": "connected",
+            "rate_limiter": rate_limit_stats
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }
+
+@app.get("/api/rate-limiter/stats")
+async def get_rate_limiter_stats():
+    """Obtiene estadísticas detalladas del rate limiter"""
+    try:
+        from rate_limiter import get_all_rate_limit_stats
+        return get_all_rate_limit_stats()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obteniendo estadísticas: {str(e)}")
+
+@app.post("/api/rate-limiter/reset")
+async def reset_rate_limiter_stats():
+    """Reinicia las estadísticas del rate limiter"""
+    try:
+        from rate_limiter import gemini_limiter, gemini_embeddings_limiter
+        gemini_limiter.reset_stats()
+        gemini_embeddings_limiter.reset_stats()
+        return {"message": "Estadísticas del rate limiter reiniciadas exitosamente"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reiniciando estadísticas: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

@@ -27,9 +27,13 @@ const useAdvancedSearch = () => {
   
   // Cache y optimización
   const debounceTimeout = useRef(null);
+  const searchInProgress = useRef(false);
+  const lastSearchRef = useRef({ term: '', filters: {}, timestamp: 0 });
+  const searchCacheRef = useRef(new Map());
 
   // Constantes
-  const DEBOUNCE_DELAY = 300;
+  const DEBOUNCE_DELAY = 500; // Aumentado para evitar búsquedas muy frecuentes
+  const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 minutos en milisegundos
 
   // Función para obtener etiqueta de filtro
   const getFilterLabel = useCallback((filterName, value) => {
@@ -104,15 +108,96 @@ const useAdvancedSearch = () => {
     setSuggestions(basicSuggestions);
   }, []);
 
+  // Función para generar clave de cache
+  const generateCacheKey = useCallback((term, searchFilters) => {
+    return JSON.stringify({ term: term.trim().toLowerCase(), filters: searchFilters });
+  }, []);
+
+  // Función para verificar si es la misma búsqueda
+  const isSameSearch = useCallback((term, searchFilters) => {
+    const currentSearch = { term: term.trim(), filters: searchFilters };
+    const lastSearch = lastSearchRef.current;
+    
+    return (
+      currentSearch.term === lastSearch.term &&
+      JSON.stringify(currentSearch.filters) === JSON.stringify(lastSearch.filters) &&
+      Date.now() - lastSearch.timestamp < 1000 // Evitar búsquedas duplicadas en menos de 1 segundo
+    );
+  }, []);
+
+  // Función para obtener resultado desde cache
+  const getCachedResult = useCallback((cacheKey) => {
+    const cached = searchCacheRef.current.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_EXPIRY_TIME) {
+      return cached.result;
+    }
+    return null;
+  }, [CACHE_EXPIRY_TIME]);
+
+  // Función para guardar en cache
+  const setCachedResult = useCallback((cacheKey, result) => {
+    searchCacheRef.current.set(cacheKey, {
+      result,
+      timestamp: Date.now()
+    });
+    
+    // Limpiar cache antiguo (mantener solo los últimos 20 resultados)
+    if (searchCacheRef.current.size > 20) {
+      const entries = Array.from(searchCacheRef.current.entries());
+      entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
+      
+      const newCache = new Map();
+      entries.slice(0, 20).forEach(([key, value]) => {
+        newCache.set(key, value);
+      });
+      searchCacheRef.current = newCache;
+    }
+  }, []);
+
   // Función para búsqueda avanzada
-  const performAdvancedSearch = useCallback(async (searchParams) => {
+  const performAdvancedSearch = useCallback(async (searchParams, onSearchCallback) => {
+    const { term = searchTerm, filters: searchFilters = filters } = searchParams || {};
+    
+    // Verificar si es la misma búsqueda que la anterior
+    if (isSameSearch(term, searchFilters)) {
+      return;
+    }
+
+    // Verificar si hay una búsqueda en progreso
+    if (searchInProgress.current) {
+      return;
+    }
+
+    // Verificar cache
+    const cacheKey = generateCacheKey(term, searchFilters);
+    const cachedResult = getCachedResult(cacheKey);
+    
+    if (cachedResult) {
+      // Actualizar referencia de última búsqueda
+      lastSearchRef.current = { term, filters: searchFilters, timestamp: Date.now() };
+      return cachedResult;
+    }
+
     setIsSearching(true);
     setSearchError(null);
+    searchInProgress.current = true;
     
     try {
-      // Implementación simplificada de búsqueda avanzada
-      // Por ahora, solo simulamos una búsqueda
-      const results = [];
+      let results;
+      
+      // Llamar al callback de búsqueda proporcionado por el componente padre
+      if (onSearchCallback && typeof onSearchCallback === 'function') {
+        results = await onSearchCallback({ term, filters: searchFilters });
+      } else {
+        // Implementación por defecto si no se proporciona callback
+        results = [];
+      }
+      
+      // Guardar en cache
+      setCachedResult(cacheKey, results);
+      
+      // Actualizar referencia de última búsqueda
+      lastSearchRef.current = { term, filters: searchFilters, timestamp: Date.now() };
       
       return results;
     } catch (error) {
@@ -120,11 +205,12 @@ const useAdvancedSearch = () => {
       throw error;
     } finally {
       setIsSearching(false);
+      searchInProgress.current = false;
     }
-  }, []);
+  }, [searchTerm, filters, isSameSearch, generateCacheKey, getCachedResult, setCachedResult]);
 
-  // Función para búsqueda con debounce
-  const debouncedSearch = useCallback((searchParams) => {
+  // Función para búsqueda con debounce mejorado
+  const debouncedSearch = useCallback((searchParams, onSearchCallback) => {
     if (debounceTimeout.current) {
       clearTimeout(debounceTimeout.current);
     }
@@ -132,7 +218,7 @@ const useAdvancedSearch = () => {
     return new Promise((resolve, reject) => {
       debounceTimeout.current = setTimeout(async () => {
         try {
-          const result = await performAdvancedSearch(searchParams);
+          const result = await performAdvancedSearch(searchParams, onSearchCallback);
           resolve(result);
         } catch (error) {
           reject(error);
@@ -142,11 +228,11 @@ const useAdvancedSearch = () => {
   }, [performAdvancedSearch]);
 
   // Función para búsqueda inmediata
-  const searchImmediately = useCallback(async (searchParams) => {
+  const searchImmediately = useCallback(async (searchParams, onSearchCallback) => {
     if (debounceTimeout.current) {
       clearTimeout(debounceTimeout.current);
     }
-    return await performAdvancedSearch(searchParams);
+    return await performAdvancedSearch(searchParams, onSearchCallback);
   }, [performAdvancedSearch]);
 
   // Función para obtener metadatos de filtros (simplificada)
@@ -158,6 +244,25 @@ const useAdvancedSearch = () => {
       fileTypes: ['pdf', 'epub', 'txt'],
       sources: ['local', 'drive']
     };
+  }, []);
+
+  // Función para actualizar término de búsqueda con debounce
+  const updateSearchTerm = useCallback((newTerm) => {
+    setSearchTerm(newTerm);
+    
+    // Limpiar timeout anterior
+    if (debounceTimeout.current) {
+      clearTimeout(debounceTimeout.current);
+    }
+    
+    // Solo mostrar sugerencias si hay texto
+    if (newTerm.trim().length >= 2) {
+      setShowSuggestions(true);
+      // setShowHistory(false); // This state doesn't exist in the original file
+    } else {
+      setShowSuggestions(false);
+      // setShowHistory(false); // This state doesn't exist in the original file
+    }
   }, []);
 
   // Efecto para limpiar timeout al desmontar
@@ -182,7 +287,7 @@ const useAdvancedSearch = () => {
     
     // Acciones de búsqueda
     setSearchTerm,
-    updateSearchTerm: setSearchTerm,
+    updateSearchTerm, // Usar la nueva función con debounce
     updateFilters: updateFilter,
     setShowSuggestions,
     setIsAdvancedMode,
@@ -199,6 +304,13 @@ const useAdvancedSearch = () => {
         hasFile: false
       });
       setActiveFilters([]);
+      // Limpiar timeout al limpiar búsqueda
+      if (debounceTimeout.current) {
+        clearTimeout(debounceTimeout.current);
+      }
+      // Limpiar cache
+      searchCacheRef.current.clear();
+      lastSearchRef.current = { term: '', filters: {}, timestamp: 0 };
     },
     clearAllFilters: clearFilters,
     removeFilter,

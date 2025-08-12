@@ -25,8 +25,15 @@ export const AppModeProvider = ({ children }) => {
 
   const changeAppMode = (newMode) => {
     try {
+      console.log('🔄 Cambiando modo de aplicación:', { from: appMode, to: newMode });
+      console.log('🔍 Valores que se establecerán:', {
+        newMode,
+        isLocalMode: newMode === 'local',
+        isDriveMode: newMode === 'drive'
+      });
       setAppMode(newMode);
       localStorage.setItem('appMode', newMode);
+      console.log('✅ Modo de aplicación cambiado exitosamente a:', newMode);
     } catch (error) {
       console.error('Error al cambiar modo de aplicación:', error);
     }
@@ -38,6 +45,9 @@ export const AppModeProvider = ({ children }) => {
     isLocalMode: appMode === 'local',
     isDriveMode: appMode === 'drive'
   };
+
+  // Log del valor del contexto
+  console.log('🔍 AppModeContext value:', value);
 
   return (
     <AppModeContext.Provider value={value}>

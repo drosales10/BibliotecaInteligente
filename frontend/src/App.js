@@ -10,7 +10,7 @@ import ToolsView from './ToolsView';
 import ReadView from './ReadView';
 import RagView from './RagView';
 import TestComponent from './TestComponent';
-import BackendStatusIndicator from './components/BackendStatusIndicator';
+// import BackendStatusIndicator from './components/BackendStatusIndicator';
 import './App.css';
 
 function App() {
@@ -31,7 +31,7 @@ function App() {
                 <Route path="/test" element={<TestComponent />} />
               </Routes>
             </main>
-            <BackendStatusIndicator />
+            {/* <BackendStatusIndicator /> */}
           </div>
         </Router>
       </AppModeProvider>

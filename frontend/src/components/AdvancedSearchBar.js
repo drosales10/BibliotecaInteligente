@@ -58,7 +58,7 @@ const AdvancedSearchBar = ({
 
   // Función para manejar la búsqueda
   const handleSearch = (term = searchTerm) => {
-    if (term.trim()) {
+    if (term.trim() && !isLoading) {
       onSearchChange(term);
       setShowHistory(false);
       setSelectedSuggestion(-1);
@@ -97,23 +97,29 @@ const AdvancedSearchBar = ({
 
   // Función para seleccionar sugerencia
   const handleSuggestionClick = (suggestion) => {
-    onSearchChange(suggestion);
-    handleSearch(suggestion);
+    if (!isLoading) {
+      onSearchChange(suggestion);
+      handleSearch(suggestion);
+    }
   };
 
   // Función para seleccionar del historial
   const handleHistoryClick = (historyItem) => {
-    onSearchChange(historyItem.term);
-    handleSearch(historyItem.term);
+    if (!isLoading) {
+      onSearchChange(historyItem.term);
+      handleSearch(historyItem.term);
+    }
   };
 
   // Función para limpiar búsqueda
   const handleClear = () => {
-    onClear();
-    setShowSuggestions(false);
-    setShowHistory(false);
-    setSelectedSuggestion(-1);
-    inputRef.current?.focus();
+    if (!isLoading) {
+      onClear();
+      setShowSuggestions(false);
+      setShowHistory(false);
+      setSelectedSuggestion(-1);
+      inputRef.current?.focus();
+    }
   };
 
   // Función para activar modo avanzado
@@ -148,12 +154,14 @@ const AdvancedSearchBar = ({
 
   return (
     <div className={`advanced-search-bar ${className}`}>
-      <div className="search-input-container">
+      <div className={`search-input-container ${isLoading ? 'loading' : ''}`}>
         {/* Icono de búsqueda */}
         <div className="search-icon">
           {isLoading ? (
-            <div className="search-spinner">
-              <div className="spinner"></div>
+            <div className="search-progress">
+              <div className="search-progress-bar">
+                <div className="search-progress-fill"></div>
+              </div>
             </div>
           ) : (
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -172,9 +180,10 @@ const AdvancedSearchBar = ({
           onFocus={handleFocus}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder}
+          placeholder={isLoading ? "Buscando..." : placeholder}
           className="search-input"
           aria-label="Buscar libros"
+          disabled={isLoading}
         />
 
         {/* Botón de limpiar */}
@@ -183,6 +192,7 @@ const AdvancedSearchBar = ({
             type="button"
             onClick={handleClear}
             className="clear-button"
+            disabled={isLoading}
             aria-label="Limpiar búsqueda"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -200,9 +210,17 @@ const AdvancedSearchBar = ({
           disabled={!searchTerm || !searchTerm.trim() || isLoading}
           aria-label="Buscar"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="m9 18 6-6-6-6" />
-          </svg>
+          {isLoading ? (
+            <div className="button-progress">
+              <div className="button-progress-bar">
+                <div className="button-progress-fill"></div>
+              </div>
+            </div>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+          )}
         </button>
 
         {/* Botón de modo avanzado */}

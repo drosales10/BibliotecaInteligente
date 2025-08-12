@@ -40,24 +40,43 @@
   height: 20px;
 }
 
-.search-spinner {
+.search-progress {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 20px;
+  height: 20px;
 }
 
-.spinner {
+.search-progress-bar {
   width: 16px;
-  height: 16px;
-  border: 2px solid var(--border-color);
-  border-top: 2px solid var(--primary-color);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+  height: 3px;
+  background: var(--border-color);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+.search-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary-color), var(--primary-color-light, var(--primary-color)));
+  border-radius: 2px;
+  animation: progressSlide 1.5s ease-in-out infinite;
+}
+
+@keyframes progressSlide {
+  0% {
+    width: 0%;
+    transform: translateX(-100%);
+  }
+  50% {
+    width: 70%;
+    transform: translateX(0%);
+  }
+  100% {
+    width: 100%;
+    transform: translateX(100%);
+  }
 }
 
 .search-input {
@@ -449,9 +468,17 @@
   border-color: var(--primary-color);
 }
 
-.search-spinner .spinner {
-  border-color: var(--border-color);
-  border-top-color: var(--primary-color);
+/* Mejoras visuales para la barra de progreso */
+.search-input-container.loading .search-progress-bar {
+  background: rgba(var(--primary-color-rgb, 59, 130, 246), 0.2);
+}
+
+.search-input-container.loading .search-progress-fill {
+  background: linear-gradient(90deg, 
+    var(--primary-color), 
+    var(--primary-color-light, rgba(var(--primary-color-rgb, 59, 130, 246), 0.8)),
+    var(--primary-color)
+  );
 } 
 
 /* Estilos responsivos mejorados para AdvancedSearchBar - Fase 2.3 */
@@ -491,18 +518,15 @@
   flex-shrink: 0;
 }
 
-.search-spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--border-color);
-  border-top: 2px solid var(--primary-color);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+/* Estilos de progreso mejorados para modo oscuro */
+.search-progress-bar {
+  background: var(--border-color);
+  transition: background-color 0.2s ease;
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+.search-progress-fill {
+  background: linear-gradient(90deg, var(--primary-color), var(--primary-color));
+  box-shadow: 0 0 4px rgba(var(--primary-color-rgb, 59, 130, 246), 0.5);
 }
 
 .search-input {
@@ -838,7 +862,8 @@
     transition: none;
   }
   
-  .search-spinner {
+  .search-progress-fill,
+  .button-progress-fill {
     animation: none;
   }
 }
@@ -846,20 +871,38 @@
 /* Modo oscuro mejorado */
 @media (prefers-color-scheme: dark) {
   .search-input-container {
-    background: var(--card-bg-dark);
-    border-color: var(--border-color-dark);
-    box-shadow: var(--card-shadow-dark);
+    background: var(--card-bg-dark, var(--background-secondary));
+    border-color: var(--border-color-dark, var(--border-color));
+    box-shadow: var(--card-shadow-dark, var(--card-shadow));
   }
   
   .suggestions-panel {
-    background: var(--card-bg-dark);
-    border-color: var(--border-color-dark);
-    box-shadow: var(--card-shadow-dark);
+    background: var(--card-bg-dark, var(--background-primary));
+    border-color: var(--border-color-dark, var(--border-color));
+    box-shadow: var(--card-shadow-dark, var(--card-shadow));
   }
   
   .suggestion-item:hover,
   .history-item:hover {
-    background: var(--hover-bg-dark);
+    background: var(--hover-bg-dark, var(--background-hover));
+  }
+  
+  /* Barra de progreso en modo oscuro */
+  .search-progress-bar {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  .search-progress-fill {
+    background: linear-gradient(90deg, var(--primary-color), var(--primary-color));
+    box-shadow: 0 0 6px rgba(var(--primary-color-rgb, 59, 130, 246), 0.7);
+  }
+  
+  .button-progress-bar {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  
+  .search-input-container.loading .search-progress-bar {
+    background: rgba(var(--primary-color-rgb, 59, 130, 246), 0.3);
   }
 }
 
@@ -931,4 +974,74 @@
   .history-meta {
     font-size: 0.9rem;
   }
+} 
+
+.button-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.button-progress-bar {
+  width: 14px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 1px;
+  overflow: hidden;
+  position: relative;
+}
+
+.button-progress-fill {
+  height: 100%;
+  background: currentColor;
+  border-radius: 1px;
+  animation: progressSlide 1.5s ease-in-out infinite;
+}
+
+/* Mejorar la experiencia visual durante la carga */
+.search-input-container.loading {
+  border-color: var(--primary-color);
+  box-shadow: 0 4px 16px rgba(var(--primary-rgb), 0.3);
+}
+
+.search-input-container.loading .search-input {
+  color: var(--primary-color);
+}
+
+/* Deshabilitar interacciones durante la carga */
+.search-input-container.loading * {
+  pointer-events: none;
+}
+
+.search-input-container.loading .search-input {
+  pointer-events: auto; /* Permitir edición del input */
+}
+
+/* Transiciones suaves para cambios de estado */
+.search-input-container,
+.search-input,
+.clear-button,
+.search-button,
+.advanced-mode-button {
+  transition: all 0.2s ease;
+}
+
+/* Estados de hover mejorados */
+.search-button:not(:disabled):hover {
+  background: var(--primary-color);
+  color: white;
+  transform: translateY(-1px);
+}
+
+.clear-button:not(:disabled):hover {
+  background: var(--error-color, #ef4444);
+  color: white;
+  transform: translateY(-1px);
+}
+
+.advanced-mode-button:not(:disabled):hover {
+  background: var(--background-tertiary);
+  transform: translateY(-1px);
 } 

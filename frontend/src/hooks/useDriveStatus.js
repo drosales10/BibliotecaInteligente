@@ -163,7 +163,8 @@ export const useDriveStatus = () => {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [checkDriveStatus]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Sin dependencias para ejecutar solo al montar
 
   // Verificación periódica cada 5 minutos si el estado es ok
   useEffect(() => {
@@ -174,7 +175,8 @@ export const useDriveStatus = () => {
       
       return () => clearInterval(intervalId);
     }
-  }, [driveStatus.status, checkDriveStatus]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driveStatus.status]); // Solo dependencia del status
 
   return {
     driveStatus,

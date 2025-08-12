@@ -7,6 +7,16 @@ export const useBookService = () => {
 
   const getBooks = useCallback(async (category = null, search = null, page = 1, perPage = 20) => {
     try {
+      console.log('🔍 useBookService.getBooks llamado:', {
+        category,
+        search,
+        page,
+        perPage,
+        isLocalMode,
+        isDriveMode,
+        appMode
+      });
+      
       // Verificar primero si el backend está disponible
       const backendAvailable = await checkBackendHealth();
       if (!backendAvailable) {
@@ -15,6 +25,7 @@ export const useBookService = () => {
 
       // Obtener la URL del backend dinámicamente
       const backendUrl = getBackendUrl();
+      console.log('🌐 Backend URL:', backendUrl);
 
       if (isLocalMode) {
         let url = backendUrl ? `${backendUrl}/api/books/` : '/api/books/';
@@ -24,12 +35,15 @@ export const useBookService = () => {
         params.append('page', page.toString());
         params.append('per_page', perPage.toString());
         
+        console.log('📚 Llamando endpoint local:', `${url}?${params.toString()}`);
+        
         const response = await fetch(`${url}?${params.toString()}`);
         
         if (!response.ok) {
           throw new Error('Error al obtener libros del servidor local');
         }
         const data = await response.json();
+        console.log('✅ Respuesta del endpoint local:', data);
         return data;
       } else if (isDriveMode) {
         let url = backendUrl ? `${backendUrl}/api/drive/books/` : '/api/drive/books/';
@@ -39,12 +53,15 @@ export const useBookService = () => {
         params.append('page', page.toString());
         params.append('per_page', perPage.toString());
         
+        console.log('☁️ Llamando endpoint drive:', `${url}?${params.toString()}`);
+        
         const response = await fetch(`${url}?${params.toString()}`);
         
         if (!response.ok) {
           throw new Error('Error al obtener libros de Google Drive');
         }
         const data = await response.json();
+        console.log('✅ Respuesta del endpoint drive:', data);
         return data;
       }
     } catch (error) {

@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 
 const useLoadingState = (initialStates = {}) => {
   const [loadingStates, setLoadingStates] = useState(initialStates);
+  const loadingStatesRef = useRef(initialStates); // Ref para acceso inmediato
   const loadingTimeouts = useRef(new Map());
   const stopLoadingRef = useRef();
 
@@ -25,13 +26,17 @@ const useLoadingState = (initialStates = {}) => {
     return operations.every(operation => loadingStates[operation]);
   }, [loadingStates]);
 
-  // Detener carga para una operación
+    // Detener carga para una operación
   const stopLoading = useCallback((operation) => {
-    setLoadingStates(prev => ({
-      ...prev,
-      [operation]: false
-    }));
-
+    setLoadingStates(prev => {
+      const newState = {
+        ...prev,
+        [operation]: false
+      };
+      loadingStatesRef.current = newState; // Sincronizar ref
+      return newState;
+    });
+    
     // Limpiar timeout si existe
     const timeoutId = loadingTimeouts.current.get(operation);
     if (timeoutId) {
@@ -45,10 +50,14 @@ const useLoadingState = (initialStates = {}) => {
 
   // Iniciar carga para una operación
   const startLoading = useCallback((operation, timeout = null) => {
-    setLoadingStates(prev => ({
-      ...prev,
-      [operation]: true
-    }));
+    setLoadingStates(prev => {
+      const newState = {
+        ...prev,
+        [operation]: true
+      };
+      loadingStatesRef.current = newState; // Sincronizar ref
+      return newState;
+    });
 
     // Configurar timeout si se especifica
     if (timeout && typeof timeout === 'number') {
@@ -112,19 +121,33 @@ const useLoadingState = (initialStates = {}) => {
     loadingTimeouts.current.clear();
   }, []);
 
-  // Wrapper para operaciones asíncronas
+  // Wrapper para operaciones asíncronas - optimizado
   const withLoading = useCallback(async (operation, asyncFunction, timeout = null) => {
+    // Usar una ref para verificar estado actual sin dependencias
+    if (loadingStatesRef.current[operation]) {
+      console.warn(`Operación ${operation} ya está en curso, ignorando llamada duplicada`);
+      return;
+    }
+
     try {
       startLoading(operation, timeout);
       const result = await asyncFunction();
       return result;
     } finally {
-      stopLoadingRef.current(operation);
+      console.log(`🏁 withLoading terminando operación: ${operation}`);
+      stopLoading(operation);
     }
-  }, [startLoading]);
+  }, [startLoading, stopLoading]); // Incluir stopLoading como dependencia
 
   // Wrapper para múltiples operaciones asíncronas
   const withMultipleLoading = useCallback(async (operations, asyncFunctions, timeout = null) => {
+    // Verificar que ninguna operación esté ya en curso
+    const alreadyLoading = operations.filter(op => loadingStates[op]);
+    if (alreadyLoading.length > 0) {
+      console.warn(`Operaciones ya en curso: ${alreadyLoading.join(', ')}, ignorando llamada duplicada`);
+      return;
+    }
+
     try {
       startMultipleLoading(operations, timeout);
       const results = await Promise.all(asyncFunctions);
@@ -132,7 +155,7 @@ const useLoadingState = (initialStates = {}) => {
     } finally {
       stopMultipleLoading(operations);
     }
-  }, [startMultipleLoading, stopMultipleLoading]);
+  }, [startLoading, stopMultipleLoading, loadingStates]);
 
   // Obtener operaciones que están cargando
   const getLoadingOperations = useCallback(() => {

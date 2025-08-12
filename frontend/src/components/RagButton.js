@@ -8,13 +8,16 @@ import './RagButton.css';
 const canBookBeProcessedForRag = (book) => {
   // Verificar si el libro tiene archivo local o está en Google Drive
   const hasLocalFile = book.file_path && 
-                      (book.file_path.toLowerCase().endsWith('.pdf') || 
-                       book.file_path.toLowerCase().endsWith('.epub'));
+                      (book.file_path.toLowerCase().includes('.pdf') || 
+                       book.file_path.toLowerCase().includes('.epub'));
   const hasDriveFile = book.drive_file_id && book.drive_filename && 
-                      (book.drive_filename.toLowerCase().endsWith('.pdf') || 
-                       book.drive_filename.toLowerCase().endsWith('.epub'));
+                      (book.drive_filename.toLowerCase().includes('.pdf') || 
+                       book.drive_filename.toLowerCase().includes('.epub'));
   
-  return hasLocalFile || hasDriveFile;
+  // Para libros locales, también verificar si tienen source: 'local'
+  const isLocalBook = book.source === 'local' || (!book.drive_file_id && !book.synced_to_drive);
+  
+  return hasLocalFile || hasDriveFile || isLocalBook;
 };
 
 const RagButton = ({ book, onRagProcessed }) => {
@@ -24,9 +27,10 @@ const RagButton = ({ book, onRagProcessed }) => {
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
   const { appMode } = useAppMode();
 
-  // Verificar estado RAG al montar el componente solo si el libro puede ser procesado
+  // Verificar estado RAG al montar el componente
   useEffect(() => {
     if (canBookBeProcessedForRag(book)) {
+      console.log(`🔍 RAG: Verificando estado del libro ${book.id} (${book.title})`);
       checkRagStatus();
     }
   }, [book.id]);
@@ -35,15 +39,36 @@ const RagButton = ({ book, onRagProcessed }) => {
     setIsLoading(true);
     try {
       const apiUrl = getBackendUrl();
+      console.log(`🔍 RAG: Verificando estado en ${apiUrl}/books/${book.id}/rag-status`);
+      
       const response = await fetch(`${apiUrl}/books/${book.id}/rag-status`);
       if (response.ok) {
         const status = await response.json();
+        console.log(`✅ RAG: Estado obtenido para libro ${book.id}:`, status);
         setRagStatus(status);
       } else {
-        console.error('Error obteniendo estado RAG:', response.statusText);
+        console.error('❌ RAG: Error obteniendo estado:', response.statusText);
+        // Si el libro no tiene estado RAG, crear uno por defecto
+        setRagStatus({
+          book_id: book.id,
+          rag_processed: false,
+          rag_book_id: null,
+          rag_chunks_count: null,
+          rag_processed_date: null,
+          can_process_rag: canBookBeProcessedForRag(book)
+        });
       }
     } catch (error) {
-      console.error('Error verificando estado RAG:', error);
+      console.error('❌ RAG: Error verificando estado:', error);
+      // En caso de error, crear estado por defecto
+      setRagStatus({
+        book_id: book.id,
+        rag_processed: false,
+        rag_book_id: null,
+        rag_chunks_count: null,
+        rag_processed_date: null,
+        can_process_rag: canBookBeProcessedForRag(book)
+      });
     } finally {
       setIsLoading(false);
     }
@@ -53,6 +78,8 @@ const RagButton = ({ book, onRagProcessed }) => {
     setIsProcessing(true);
     try {
       const apiUrl = getBackendUrl();
+      console.log(`🔄 RAG: Procesando libro ${book.id} en ${apiUrl}/books/${book.id}/process-rag`);
+      
       const response = await fetch(`${apiUrl}/books/${book.id}/process-rag`, {
         method: 'POST',
         headers: {
@@ -62,7 +89,7 @@ const RagButton = ({ book, onRagProcessed }) => {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Libro procesado para RAG:', result);
+        console.log('✅ RAG: Libro procesado exitosamente:', result);
         
         // Actualizar estado local
         await checkRagStatus();
@@ -76,11 +103,11 @@ const RagButton = ({ book, onRagProcessed }) => {
         alert(`✅ ${result.message}`);
       } else {
         const error = await response.json();
-        console.error('Error procesando RAG:', error);
+        console.error('❌ RAG: Error procesando:', error);
         alert(`❌ Error: ${error.detail}`);
       }
     } catch (error) {
-      console.error('Error de conexión:', error);
+      console.error('❌ RAG: Error de conexión:', error);
       alert('❌ Error de conexión al procesar el libro para RAG');
     } finally {
       setIsProcessing(false);
@@ -157,7 +184,6 @@ const RagButton = ({ book, onRagProcessed }) => {
     );
   } else {
     // Mostrar botón de procesamiento si el libro puede ser procesado
-    // (independientemente del estado RAG del backend)
     const buttonText = appMode === 'drive' ? '🧠 Analizar IA (Nube)' : '🧠 Analizar IA';
     const buttonTitle = appMode === 'drive' 
       ? 'Procesar libro de Google Drive para chat con IA' 

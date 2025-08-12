@@ -20,6 +20,7 @@ set USE_SSL=true
 set FRONTEND_HOST=100.81.201.68
 set FRONTEND_PORT=3000
 set ALLOWED_ORIGINS=http://100.81.201.68:3000,https://100.81.201.68:3000,http://localhost:3000,https://localhost:3000
+REM BOOKS_PATH se lee desde .env
 
 echo 🔧 Configurando modo TAILSCALE...
 echo   Frontend: http://100.81.201.68:3000

@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, Link, useLocation } from 'react-router-dom';
 import { useBookService } from './hooks/useBookService';
 import { useAppMode } from './contexts/AppModeContext';
 import { usePagination } from './hooks/usePagination';
 import useLoadingState from './hooks/useLoadingState';
 import useAdvancedSearch from './hooks/useAdvancedSearch';
+
 import BulkSyncToDriveButton from './components/BulkSyncToDriveButton';
 import PaginationControls from './components/PaginationControls';
 import LazyImage from './components/LazyImage';
-import LoadingSpinner from './components/LoadingSpinner';
-import { IndeterminateProgress } from './components/ProgressIndicator';
+
+
 import AdvancedSearchBar from './components/AdvancedSearchBar';
 import SearchFilters from './components/SearchFilters';
 import FilterChips from './components/FilterChips';
@@ -165,6 +166,7 @@ function LibraryView() {
   const [selectedBooks, setSelectedBooks] = useState(new Set());
   const [books, setBooks] = useState([]);
   const [error, setError] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [editModal, setEditModal] = useState({ 
     isOpen: false, 
     book: null 
@@ -173,8 +175,8 @@ function LibraryView() {
   const location = useLocation();
 
   // Usar los nuevos hooks
-  const { getBooks, deleteBook, appMode, getCategories } = useBookService();
-  const { isLocalMode, isDriveMode } = useAppMode();
+  const { getBooks, deleteBook, getCategories } = useBookService();
+  const { appMode, isLocalMode, isDriveMode } = useAppMode();
   
   // Hook de búsqueda avanzada
   const {
@@ -190,7 +192,9 @@ function LibraryView() {
     toggleAdvancedMode,
     removeFilter,
     clearAllFilters,
-    getActiveFilters
+    getActiveFilters,
+    performSearch: debouncedSearch,
+    searchImmediately
   } = useAdvancedSearch();
   
   // Hook de paginación
@@ -219,16 +223,114 @@ function LibraryView() {
     sync: false
   });
 
+  // Función de búsqueda optimizada para el hook avanzado
+  const handleAdvancedSearch = useCallback(async (searchParams) => {
+    try {
+      const { term = '', filters: searchFilters = {}, category = null } = searchParams;
+      
+      const booksData = await getBooks(category, term, currentPage, perPage);
+      
+      if (booksData && booksData.items) {
+        const { items: booksList, pagination } = booksData;
+        
+        // Aplicar filtros adicionales si existen
+        let filteredBooks = booksList;
+        
+        if (searchFilters.author) {
+          filteredBooks = filteredBooks.filter(book => 
+            book.author && book.author.toLowerCase().includes(searchFilters.author.toLowerCase())
+          );
+        }
+        
+        if (searchFilters.category && searchFilters.category !== category) {
+          filteredBooks = filteredBooks.filter(book => 
+            book.category && book.category.toLowerCase() === searchFilters.category.toLowerCase()
+          );
+        }
+        
+        if (searchFilters.fileType) {
+          filteredBooks = filteredBooks.filter(book => 
+            book.file_path && book.file_path.toLowerCase().endsWith(searchFilters.fileType.toLowerCase())
+          );
+        }
+        
+        if (searchFilters.source) {
+          filteredBooks = filteredBooks.filter(book => book.source === searchFilters.source);
+        }
+        
+        if (searchFilters.hasCover) {
+          filteredBooks = filteredBooks.filter(book => book.cover_image);
+        }
+        
+        if (searchFilters.hasFile) {
+          filteredBooks = filteredBooks.filter(book => book.file_path);
+        }
+        
+        // Filtrar por modo actual
+        if (isLocalMode) {
+          filteredBooks = filteredBooks.filter(book => 
+            book.source === 'local' || 
+            (!book.synced_to_drive && !book.drive_file_id)
+          );
+        } else if (isDriveMode) {
+          filteredBooks = filteredBooks.filter(book => 
+            book.source === 'drive' || 
+            book.synced_to_drive === true ||
+            book.drive_file_id
+          );
+        }
+        
+        // Actualizar estado de libros
+        setBooks(filteredBooks);
+        
+        // Actualizar información de paginación
+        if (pagination) {
+          updatePaginationInfo({
+            total: filteredBooks.length,
+            page: pagination.current_page || 1,
+            per_page: pagination.per_page || perPage,
+            pages: Math.ceil(filteredBooks.length / (pagination.per_page || perPage))
+          });
+        }
+        
+        return filteredBooks;
+      }
+      
+      setBooks([]);
+      return [];
+    } catch (error) {
+      console.error('Error en búsqueda avanzada:', error);
+      setError('Error al realizar la búsqueda');
+      throw error;
+    }
+  }, [getBooks, currentPage, perPage, isLocalMode, isDriveMode, updatePaginationInfo, setBooks, setError]);
+
   // Función para cargar libros
   const fetchBooks = useCallback(async () => {
     try {
       setError(null);
       
       const category = searchParams.get('category');
-      // Por ahora, usar solo búsqueda simple
+      // Usar el término de búsqueda del hook avanzado
       const searchQuery = searchTerm;
       
+      console.log('🚀 fetchBooks iniciado:', {
+        mode: isLocalMode ? 'LOCAL' : (isDriveMode ? 'DRIVE' : 'OTRO'),
+        category,
+        searchQuery,
+        currentPage,
+        perPage
+      });
+      
       const booksData = await getBooks(category, searchQuery, currentPage, perPage);
+      
+      console.log('📊 Respuesta del backend:', {
+        hasData: !!booksData,
+        hasItems: !!(booksData && booksData.items),
+        itemsCount: booksData?.items?.length || 0,
+        hasPagination: !!(booksData && booksData.pagination),
+        rawData: booksData
+      });
       
       // Verificar si la respuesta tiene estructura de paginación
       if (booksData && booksData.items && booksData.pagination) {
@@ -237,20 +339,48 @@ function LibraryView() {
         
         // Filtrar libros según el modo actual
         let filteredBooks = booksList;
+        console.log('📚 Total de libros recibidos:', booksList.length);
+        console.log('🔧 Modo actual:', isLocalMode ? 'LOCAL' : (isDriveMode ? 'DRIVE' : 'OTRO'));
         
         if (isLocalMode) {
           // En modo local, mostrar solo libros locales (source: 'local' o que no estén en Drive)
+          const beforeFilter = booksList.length;
           filteredBooks = booksList.filter(book => 
             book.source === 'local' || 
             (!book.synced_to_drive && !book.drive_file_id)
           );
+          console.log('🔍 Filtrado local: de', beforeFilter, 'a', filteredBooks.length, 'libros');
+          if (filteredBooks.length === 0 && booksList.length > 0) {
+            console.log('⚠️ Primer libro para debug:', booksList[0]);
+          }
         } else if (isDriveMode) {
-          // En modo nube, mostrar solo libros de Drive (source: 'drive' o synced_to_drive: true)
-          filteredBooks = booksList.filter(book => 
-            book.source === 'drive' || 
-            book.synced_to_drive === true ||
-            book.drive_file_id
-          );
+          // En modo nube, mostrar solo libros de Drive
+          // Priorizar drive_file_id que es el campo más confiable del backend
+          const beforeFilter = booksList.length;
+          filteredBooks = booksList.filter(book => {
+            // Si tiene drive_file_id, definitivamente está en Drive
+            if (book.drive_file_id) {
+              return true;
+            }
+            // Si tiene source: 'drive', está en Drive
+            if (book.source === 'drive') {
+              return true;
+            }
+            // Si está marcado como sincronizado, está en Drive
+            if (book.synced_to_drive === true) {
+              return true;
+            }
+            return false;
+          });
+          console.log('🔍 Filtrado drive: de', beforeFilter, 'a', filteredBooks.length, 'libros');
+          if (filteredBooks.length === 0 && booksList.length > 0) {
+            console.log('⚠️ Primer libro para debug (modo drive):', booksList[0]);
+            console.log('🔍 Campos del primer libro:', {
+              source: booksList[0].source,
+              synced_to_drive: booksList[0].synced_to_drive,
+              drive_file_id: booksList[0].drive_file_id
+            });
+          }
         }
         
         // Agregar información de ubicación a los libros
@@ -261,7 +391,16 @@ function LibraryView() {
           synced_to_drive: book.synced_to_drive || false
         }));
         
+        console.log('📖 Libros finales para setBooks:', booksWithLocation.length);
+        console.log('📝 Primer libro final:', booksWithLocation[0]);
+        console.log('🔍 Resumen del filtrado:', {
+          totalRecibidos: booksList.length,
+          totalFiltrados: filteredBooks.length,
+          totalFinal: booksWithLocation.length,
+          modo: isLocalMode ? 'LOCAL' : (isDriveMode ? 'DRIVE' : 'OTRO')
+        });
         setBooks(booksWithLocation);
+
         updatePaginationInfo(pagination);
       } else {
         // Estructura antigua (sin paginación) - mantener compatibilidad
@@ -273,11 +412,21 @@ function LibraryView() {
             (!book.synced_to_drive && !book.drive_file_id)
           );
         } else if (isDriveMode) {
-          filteredBooks = booksData.filter(book => 
-            book.source === 'drive' || 
-            book.synced_to_drive === true ||
-            book.drive_file_id
-          );
+          filteredBooks = booksData.filter(book => {
+            // Si tiene drive_file_id, definitivamente está en Drive
+            if (book.drive_file_id) {
+              return true;
+            }
+            // Si tiene source: 'drive', está en Drive
+            if (book.source === 'drive') {
+              return true;
+            }
+            // Si está marcado como sincronizado, está en Drive
+            if (book.synced_to_drive === true) {
+              return true;
+            }
+            return false;
+          });
         }
         
         const booksWithLocation = filteredBooks.map(book => ({
@@ -286,57 +435,109 @@ function LibraryView() {
           synced_to_drive: book.synced_to_drive || false
         }));
         
+        console.log('📖 Libros finales (estructura antigua):', booksWithLocation.length);
+        console.log('🔍 Resumen del filtrado (estructura antigua):', {
+          totalRecibidos: booksData.length,
+          totalFiltrados: filteredBooks.length,
+          totalFinal: booksWithLocation.length,
+          modo: isLocalMode ? 'LOCAL' : (isDriveMode ? 'DRIVE' : 'OTRO')
+        });
+        
         setBooks(booksWithLocation);
-        // Resetear paginación para estructura antigua
-        resetPagination();
+
+        updatePaginationInfo({ total: booksData.length, page: 1, per_page: booksData.length });
       }
-    } catch (err) {
-      console.error('❌ Error en fetchBooks:', err);
-      setError(err.message);
-      console.error('Error al cargar libros:', err);
+    } catch (error) {
+      console.error('Error al cargar libros:', error);
+      setError('Error al cargar los libros. Por favor, inténtalo de nuevo.');
+    } finally {
+      console.log('🏁 fetchBooks terminado');
+      console.log('🔍 Estado final después de fetchBooks:', {
+        books: books.length,
+        error,
+        modo: isLocalMode ? 'LOCAL' : (isDriveMode ? 'DRIVE' : 'OTRO')
+      });
     }
-  }, [getBooks, searchParams, searchTerm, currentPage, perPage, isLocalMode, isDriveMode, updatePaginationInfo, resetPagination]);
+  }, [getBooks, searchParams, searchTerm, currentPage, perPage, isLocalMode, isDriveMode, updatePaginationInfo]); // Dependencias completas
+
+
 
   // Función para actualizar libros manualmente
   const refreshBooks = useCallback(() => {
+    console.log('🔄 refreshBooks llamado manualmente');
     fetchBooks();
   }, [fetchBooks]);
 
-  // Efecto para cargar libros al montar el componente
+  // Efecto para cargar libros al montar el componente (solo una vez)
   useEffect(() => {
-    withLoading('initial', fetchBooks);
-  }, [fetchBooks, withLoading]);
+    if (!isInitialized) {
+      const loadBooks = async () => {
+        try {
+          console.log('🚀 Iniciando carga inicial de libros...');
+          await fetchBooks(); // Usar fetchBooks directamente
+          console.log('✅ Carga inicial completada');
+          setIsInitialized(true);
+        } catch (error) {
+          console.error('❌ Error al cargar libros iniciales:', error);
+          setIsInitialized(true); // Marcar como inicializado incluso si hay error
+        }
+      };
+      loadBooks();
+    }
+  }, [isInitialized, fetchBooks]); // Incluir fetchBooks en las dependencias
 
   // Efecto para recargar libros cuando cambia el modo de aplicación
   useEffect(() => {
-    withLoading('initial', fetchBooks);
-  }, [appMode, isLocalMode, isDriveMode, withLoading, fetchBooks]);
+    console.log('🔄 useEffect appMode detectado:', {
+      appMode,
+      isInitialized,
+      isLocalMode,
+      isDriveMode
+    });
+    
+    // Solo recargar si ya se han inicializado
+    if (isInitialized) {
+      console.log('🔄 Recargando libros por cambio de modo...');
+      console.log('🔍 Estado actual antes de fetchBooks:', {
+        books: books.length,
+        error,
+        loading: isLoading('initial')
+      });
+      // Usar fetchBooks directamente en lugar de withLoading para evitar duplicados
+      fetchBooks();
+    } else {
+      console.log('⏳ No se recargan libros - componente no inicializado');
+    }
+  }, [appMode, isInitialized, fetchBooks]); // Incluir fetchBooks en las dependencias
 
   // Efecto para actualizar libros cuando cambia la ubicación (después de añadir un libro)
   useEffect(() => {
     if (location.state?.refreshBooks) {
-      withLoading('initial', fetchBooks);
+      console.log('🔄 Recargando libros por cambio de ubicación...');
+      // Usar fetchBooks directamente en lugar de withLoading para evitar duplicados
+      fetchBooks();
       // Limpiar el estado para evitar recargas innecesarias
       window.history.replaceState({}, document.title);
     }
-  }, [location.state, fetchBooks, withLoading]);
+  }, [location.state, fetchBooks]); // Incluir fetchBooks en las dependencias
 
-  // Efecto para resetear paginación cuando cambia la búsqueda o categoría
-  useEffect(() => {
-    resetPagination();
-  }, [searchTerm, filters, searchParams, resetPagination]);
+  // Los efectos de sincronización ya no son necesarios con el nuevo sistema unificado
 
-  // Efecto para recargar libros cuando cambia la paginación
+  // Efecto para resetear paginación cuando cambia la búsqueda
   useEffect(() => {
-    withLoading('pagination', fetchBooks);
-  }, [currentPage, perPage, withLoading, fetchBooks]);
-
-  // Efecto para búsqueda avanzada
-  useEffect(() => {
-    if (isAdvancedMode && (searchTerm || Object.keys(filters).length > 0)) {
-      withLoading('search', fetchBooks);
+    if (searchTerm.trim() || Object.values(filters).some(v => v && v !== '')) {
+      resetPagination();
     }
-  }, [searchTerm, filters, isAdvancedMode, withLoading, fetchBooks]);
+  }, [searchTerm, filters, resetPagination]);
+
+  // Efecto para recargar libros cuando cambia la paginación (solo si no hay búsqueda activa)
+  useEffect(() => {
+    if (!searchTerm.trim() && !Object.values(filters).some(v => v && v !== '') && isInitialized) {
+      console.log('🔄 Cambio en paginación detectado, recargando libros...');
+      // Usar fetchBooks directamente en lugar de withLoading para evitar duplicados
+      fetchBooks();
+    }
+  }, [currentPage, perPage, isInitialized, searchTerm, filters, fetchBooks]); // Incluir fetchBooks en las dependencias
 
   const handleDeleteClick = (bookId, bookTitle) => {
     // handleDeleteClick llamado
@@ -368,17 +569,18 @@ function LibraryView() {
     setDeletingBookId(bookId);
     
     try {
-              // Llamando a deleteBook
+      // Llamando a deleteBook
       const response = await deleteBook(bookId);
-              // Respuesta de deleteBook recibida
+      // Respuesta de deleteBook recibida
       
       if (response.ok) {
-                  // Eliminación exitosa, recargando libros
+        // Eliminación exitosa, recargando libros
         // Recargar la lista de libros para actualizar la UI
-        await withLoading('initial', fetchBooks);
+        console.log('🔄 Recargando libros después de eliminación...');
+        await fetchBooks(); // Usar fetchBooks directamente
         resetModal();
       } else {
-                  // Error en respuesta del servidor
+        // Error en respuesta del servidor
         const errorData = await response.json();
         alert(`Error al eliminar el libro: ${errorData.detail || 'Error desconocido'}`);
       }
@@ -449,7 +651,8 @@ function LibraryView() {
       }
 
       // Re-fetch books to update the UI
-      await withLoading('initial', fetchBooks);
+      console.log('🔄 Recargando libros después de eliminación masiva...');
+      await fetchBooks(); // Usar fetchBooks directamente
       resetModal();
       setSelectionMode(false);
       setSelectedBooks(new Set());
@@ -520,6 +723,17 @@ function LibraryView() {
   // Validar que books sea un array antes de renderizar
   const safeBooks = Array.isArray(books) ? books : [];
   const booksLength = safeBooks.length;
+  
+  // Debug del estado de renderizado
+  console.log('🎨 Renderizando LibraryView:');
+  console.log('   📚 books state:', books);
+  console.log('   📚 safeBooks length:', booksLength);
+  console.log('   🔄 isLoading(initial):', isLoading('initial'));
+  console.log('   🔍 isLoading(search):', isLoading('search'));
+  console.log('   📄 isLoading(pagination):', isLoading('pagination'));
+  console.log('   ✅ isInitialized:', isInitialized);
+  
+
 
   // Función para manejar la sincronización completada
   const handleSyncComplete = useCallback((bookId, result) => {
@@ -713,73 +927,81 @@ function LibraryView() {
       <div className="controls-container">
         <AdvancedSearchBar
           searchTerm={searchTerm}
-          onSearchChange={updateSearchTerm}
-          onClear={clearSearch}
+          onSearchChange={(term) => {
+            updateSearchTerm(term);
+            // Ejecutar búsqueda avanzada con debounce
+            if (term.trim()) {
+              debouncedSearch({ term, filters }, handleAdvancedSearch);
+            } else {
+              // Si no hay término de búsqueda, recargar libros normalmente
+              fetchBooks();
+            }
+          }}
+          onClear={() => {
+            clearSearch();
+            // Recargar libros cuando se limpia la búsqueda
+            fetchBooks();
+          }}
           onToggleAdvanced={toggleAdvancedMode}
           isAdvancedMode={isAdvancedMode}
           suggestions={suggestions}
           searchHistory={searchHistory}
-          isLoading={searchLoading}
+          isLoading={isLoading.search || searchLoading}
         />
         
         {isAdvancedMode && (
           <SearchFilters
             filters={filters}
-            onFiltersChange={updateFilters}
-            onClearFilters={clearAllFilters}
+            onFiltersChange={(filterName, value) => {
+              updateFilters(filterName, value);
+              // Ejecutar búsqueda inmediata cuando se cambian filtros
+              const updatedFilters = { ...filters, [filterName]: value };
+              if (searchTerm.trim() || Object.values(updatedFilters).some(v => v && v !== '')) {
+                searchImmediately({ term: searchTerm, filters: updatedFilters }, handleAdvancedSearch);
+              }
+            }}
+            onClearFilters={() => {
+              clearAllFilters();
+              // Recargar libros cuando se limpian todos los filtros
+              if (searchTerm.trim()) {
+                searchImmediately({ term: searchTerm, filters: {} }, handleAdvancedSearch);
+              } else {
+                fetchBooks();
+              }
+            }}
           />
         )}
         
         <FilterChips
           activeFilters={getActiveFilters()}
-          onRemoveFilter={removeFilter}
-          onClearAll={clearAllFilters}
+          onRemoveFilter={(filterName) => {
+            removeFilter(filterName);
+            // Ejecutar búsqueda después de remover filtro
+            const updatedFilters = { ...filters, [filterName]: '' };
+            if (searchTerm.trim() || Object.values(updatedFilters).some(v => v && v !== '')) {
+              searchImmediately({ term: searchTerm, filters: updatedFilters }, handleAdvancedSearch);
+            } else {
+              fetchBooks();
+            }
+          }}
+          onClearAll={() => {
+            clearAllFilters();
+            // Recargar libros cuando se limpian todos los filtros
+            if (searchTerm.trim()) {
+              searchImmediately({ term: searchTerm, filters: {} }, handleAdvancedSearch);
+            } else {
+              fetchBooks();
+            }
+          }}
         />
       </div>
 
       {error && <p className="error-message">{error}</p>}
       
-      {/* Estados de carga mejorados */}
-      {isLoading('initial') && (
-        <div className="loading-container">
-          <LoadingSpinner 
-            size="medium" 
-            variant="dots" 
-            text="Cargando libros..." 
-            color="primary"
-          />
-        </div>
-      )}
-      
-      {isLoading('search') && (
-        <div className="loading-container">
-          <LoadingSpinner 
-            size="medium" 
-            variant="dots" 
-            text="Buscando libros..." 
-            color="primary"
-          />
-        </div>
-      )}
-      
-      {isLoading('pagination') && (
-        <div className="loading-container">
-          <IndeterminateProgress 
-            text="Cargando página..." 
-            variant="default"
-            size="small"
-          />
-        </div>
-      )}
-      
-      {!isLoading('initial') && !isLoading('search') && !isLoading('pagination') && booksLength === 0 && !error && (
-        <div className="empty-state">
-          <p>No se encontraron libros que coincidan con tu búsqueda.</p>
-        </div>
-      )}
-
-      <div className="book-grid">
-        {safeBooks.map((book) => {
+      {/* Grid de libros - siempre visible si hay libros */}
+      {safeBooks.length > 0 && (
+        <div className="book-grid">
+          {safeBooks.map((book) => {
           return (
             <div 
               key={book.id} 
@@ -858,10 +1080,18 @@ function LibraryView() {
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
+
+      {/* Mensaje si no hay libros */}
+      {safeBooks.length === 0 && isInitialized && !error && (
+        <div className="empty-state">
+          <p>No se encontraron libros.</p>
+        </div>
+      )}
 
       {/* Controles de paginación */}
-      {!isLoading('initial') && !isLoading('search') && !isLoading('pagination') && totalPages > 1 && (
+      {totalPages > 1 && (
         <PaginationControls
           currentPage={currentPage}
           totalPages={totalPages}

@@ -142,7 +142,7 @@ class RateLimiter:
                             timeout: float = 30.0,
                             **kwargs) -> Any:
         """
-        Ejecuta una función con rate limiting
+        Ejecuta una función con rate limiting y reintentos automáticos
         
         Args:
             func: Función a ejecutar
@@ -155,44 +155,103 @@ class RateLimiter:
             Resultado de la función o excepción
         """
         
-        # Verificar si podemos hacer la llamada
-        can_call, reason = self._can_make_call()
-        if not can_call:
-            logger.warning(f"Rate limit: {reason}")
-            raise RateLimitExceeded(reason)
+        last_exception = None
+        retry_count = 0
         
-        # Adquirir semáforo para concurrencia
-        async with self.semaphore:
-            start_time = time.time()
-            
+        while retry_count <= self.config.max_retries:
             try:
-                # Ejecutar la función
-                if asyncio.iscoroutinefunction(func):
-                    result = await asyncio.wait_for(func(*args, **kwargs), timeout=timeout)
+                # Verificar si podemos hacer la llamada
+                can_call, reason = self._can_make_call()
+                if not can_call:
+                    if retry_count < self.config.max_retries:
+                        wait_time = self._extract_wait_time(reason)
+                        logger.warning(f"Rate limit: {reason}. Reintentando en {wait_time:.1f}s (intento {retry_count + 1}/{self.config.max_retries + 1})")
+                        await asyncio.sleep(wait_time)
+                        retry_count += 1
+                        continue
+                    else:
+                        logger.error(f"Rate limit: {reason}. Máximo de reintentos alcanzado.")
+                        raise RateLimitExceeded(reason)
+                
+                # Adquirir semáforo para concurrencia
+                async with self.semaphore:
+                    start_time = time.time()
+                    
+                    try:
+                        # Ejecutar la función
+                        if asyncio.iscoroutinefunction(func):
+                            result = await asyncio.wait_for(func(*args, **kwargs), timeout=timeout)
+                        else:
+                            # Para funciones síncronas, ejecutar en thread pool
+                            loop = asyncio.get_event_loop()
+                            result = await loop.run_in_executor(None, lambda: func(*args, **kwargs))
+                        
+                        response_time = time.time() - start_time
+                        self._record_call(success=True, response_time=response_time)
+                        
+                        logger.info(f"API call successful ({self.provider.value}): {response_time:.2f}s")
+                        return result
+                        
+                    except Exception as e:
+                        response_time = time.time() - start_time
+                        self._record_call(success=False, response_time=response_time)
+                        
+                        # Verificar si es un error de rate limiting
+                        error_msg = str(e).lower()
+                        if any(keyword in error_msg for keyword in ["quota", "rate", "limit", "429", "too many"]):
+                            self.stats.rate_limited_calls += 1
+                            logger.warning(f"Rate limit from API ({self.provider.value}): {e}")
+                            
+                            if retry_count < self.config.max_retries:
+                                wait_time = self.config.retry_delay * (self.config.backoff_multiplier ** retry_count)
+                                logger.info(f"Reintentando en {wait_time:.1f}s (intento {retry_count + 1}/{self.config.max_retries + 1})")
+                                await asyncio.sleep(wait_time)
+                                retry_count += 1
+                                continue
+                            else:
+                                raise RateLimitExceeded(f"API rate limit: {e}")
+                        
+                        logger.error(f"API call failed ({self.provider.value}): {e}")
+                        raise
+                        
+            except RateLimitExceeded as e:
+                last_exception = e
+                if retry_count < self.config.max_retries:
+                    wait_time = self.config.retry_delay * (self.config.backoff_multiplier ** retry_count)
+                    logger.info(f"Rate limit exceeded, reintentando en {wait_time:.1f}s (intento {retry_count + 1}/{self.config.max_retries + 1})")
+                    await asyncio.sleep(wait_time)
+                    retry_count += 1
+                    continue
                 else:
-                    # Para funciones síncronas, ejecutar en thread pool
-                    loop = asyncio.get_event_loop()
-                    result = await loop.run_in_executor(None, lambda: func(*args, **kwargs))
-                
-                response_time = time.time() - start_time
-                self._record_call(success=True, response_time=response_time)
-                
-                logger.info(f"API call successful ({self.provider.value}): {response_time:.2f}s")
-                return result
-                
+                    break
             except Exception as e:
-                response_time = time.time() - start_time
-                self._record_call(success=False, response_time=response_time)
-                
-                # Verificar si es un error de rate limiting
-                error_msg = str(e).lower()
-                if any(keyword in error_msg for keyword in ["quota", "rate", "limit", "429", "too many"]):
-                    self.stats.rate_limited_calls += 1
-                    logger.warning(f"Rate limit from API ({self.provider.value}): {e}")
-                    raise RateLimitExceeded(f"API rate limit: {e}")
-                
-                logger.error(f"API call failed ({self.provider.value}): {e}")
-                raise
+                last_exception = e
+                logger.error(f"Unexpected error in call_with_limit: {e}")
+                break
+        
+        # Si llegamos aquí, todos los reintentos fallaron
+        if last_exception:
+            raise last_exception
+        else:
+            raise Exception("Unknown error in call_with_limit")
+
+    def _extract_wait_time(self, reason: str) -> float:
+        """Extrae el tiempo de espera del mensaje de rate limit"""
+        try:
+            if "minuto" in reason:
+                # Buscar el número de segundos en el mensaje
+                import re
+                match = re.search(r'(\d+\.?\d*)s', reason)
+                if match:
+                    return float(match.group(1))
+            elif "hora" in reason:
+                # Para límites por hora, usar un delay más corto
+                return self.config.retry_delay
+        except:
+            pass
+        
+        # Fallback al delay configurado
+        return self.config.retry_delay
 
     def call_with_limit_sync(self, 
                            func: Callable,
@@ -200,40 +259,81 @@ class RateLimiter:
                            user_id: str = "anonymous",
                            **kwargs) -> Any:
         """
-        Versión síncrona de call_with_limit
+        Versión síncrona de call_with_limit con reintentos automáticos
         """
         
-        # Verificar si podemos hacer la llamada
-        can_call, reason = self._can_make_call()
-        if not can_call:
-            logger.warning(f"Rate limit: {reason}")
-            raise RateLimitExceeded(reason)
+        last_exception = None
+        retry_count = 0
         
-        # Adquirir semáforo para concurrencia
-        with self.thread_semaphore:
-            start_time = time.time()
-            
+        while retry_count <= self.config.max_retries:
             try:
-                result = func(*args, **kwargs)
-                response_time = time.time() - start_time
-                self._record_call(success=True, response_time=response_time)
+                # Verificar si podemos hacer la llamada
+                can_call, reason = self._can_make_call()
+                if not can_call:
+                    if retry_count < self.config.max_retries:
+                        wait_time = self._extract_wait_time(reason)
+                        logger.warning(f"Rate limit: {reason}. Reintentando en {wait_time:.1f}s (intento {retry_count + 1}/{self.config.max_retries + 1})")
+                        time.sleep(wait_time)
+                        retry_count += 1
+                        continue
+                    else:
+                        logger.error(f"Rate limit: {reason}. Máximo de reintentos alcanzado.")
+                        raise RateLimitExceeded(reason)
                 
-                logger.info(f"API call successful ({self.provider.value}): {response_time:.2f}s")
-                return result
-                
+                # Adquirir semáforo para concurrencia
+                with self.thread_semaphore:
+                    start_time = time.time()
+                    
+                    try:
+                        result = func(*args, **kwargs)
+                        response_time = time.time() - start_time
+                        self._record_call(success=True, response_time=response_time)
+                        
+                        logger.info(f"API call successful ({self.provider.value}): {response_time:.2f}s")
+                        return result
+                        
+                    except Exception as e:
+                        response_time = time.time() - start_time
+                        self._record_call(success=False, response_time=response_time)
+                        
+                        # Verificar si es un error de rate limiting
+                        error_msg = str(e).lower()
+                        if any(keyword in error_msg for keyword in ["quota", "rate", "limit", "429", "too many"]):
+                            self.stats.rate_limited_calls += 1
+                            logger.warning(f"Rate limit from API ({self.provider.value}): {e}")
+                            
+                            if retry_count < self.config.max_retries:
+                                wait_time = self.config.retry_delay * (self.config.backoff_multiplier ** retry_count)
+                                logger.info(f"Reintentando en {wait_time:.1f}s (intento {retry_count + 1}/{self.config.max_retries + 1})")
+                                time.sleep(wait_time)
+                                retry_count += 1
+                                continue
+                            else:
+                                raise RateLimitExceeded(f"API rate limit: {e}")
+                        
+                        logger.error(f"API call failed ({self.provider.value}): {e}")
+                        raise
+                        
+            except RateLimitExceeded as e:
+                last_exception = e
+                if retry_count < self.config.max_retries:
+                    wait_time = self.config.retry_delay * (self.config.backoff_multiplier ** retry_count)
+                    logger.info(f"Rate limit exceeded, reintentando en {wait_time:.1f}s (intento {retry_count + 1}/{self.config.max_retries + 1})")
+                    time.sleep(wait_time)
+                    retry_count += 1
+                    continue
+                else:
+                    break
             except Exception as e:
-                response_time = time.time() - start_time
-                self._record_call(success=False, response_time=response_time)
-                
-                # Verificar si es un error de rate limiting
-                error_msg = str(e).lower()
-                if any(keyword in error_msg for keyword in ["quota", "rate", "limit", "429", "too many"]):
-                    self.stats.rate_limited_calls += 1
-                    logger.warning(f"Rate limit from API ({self.provider.value}): {e}")
-                    raise RateLimitExceeded(f"API rate limit: {e}")
-                
-                logger.error(f"API call failed ({self.provider.value}): {e}")
-                raise
+                last_exception = e
+                logger.error(f"Unexpected error in call_with_limit_sync: {e}")
+                break
+        
+        # Si llegamos aquí, todos los reintentos fallaron
+        if last_exception:
+            raise last_exception
+        else:
+            raise Exception("Unknown error in call_with_limit_sync")
 
     def get_stats(self) -> dict:
         """Obtiene estadísticas del rate limiter"""
@@ -288,21 +388,21 @@ class RateLimitExceeded(Exception):
 
 # Configuraciones específicas por proveedor
 GEMINI_CONFIG = RateLimitConfig(
-    max_concurrent_calls=5,  # Gemini free tier: 5 RPM (requests per minute)
-    max_calls_per_minute=15,  # Más permisivo para free tier
-    max_calls_per_hour=300,  # Límite razonable para uso normal
-    retry_delay=1.0,
-    max_retries=3,
-    backoff_multiplier=1.5
+    max_concurrent_calls=10,  # Aumentado de 5 a 10 para mejor rendimiento
+    max_calls_per_minute=60,  # Aumentado de 15 a 60 (1 por segundo)
+    max_calls_per_hour=2000,  # Aumentado de 300 a 2000
+    retry_delay=0.5,  # Reducido de 1.0 a 0.5 segundos
+    max_retries=5,  # Aumentado de 3 a 5 reintentos
+    backoff_multiplier=1.3  # Reducido de 1.5 a 1.3 para reintentos más rápidos
 )
 
 GEMINI_EMBEDDINGS_CONFIG = RateLimitConfig(
-    max_concurrent_calls=5,  # Embeddings pueden ser más agresivos
-    max_calls_per_minute=30,  # Mucho más permisivo para embeddings
-    max_calls_per_hour=1000,
-    retry_delay=0.5,
-    max_retries=5,
-    backoff_multiplier=1.2
+    max_concurrent_calls=15,  # Aumentado de 5 a 15 para embeddings
+    max_calls_per_minute=120,  # Aumentado de 30 a 120 (2 por segundo)
+    max_calls_per_hour=5000,  # Aumentado de 1000 a 5000
+    retry_delay=0.2,  # Reducido de 0.5 a 0.2 segundos
+    max_retries=8,  # Aumentado de 5 a 8 reintentos
+    backoff_multiplier=1.1  # Reducido de 1.2 a 1.1 para reintentos más rápidos
 )
 
 # Rate limiters globales

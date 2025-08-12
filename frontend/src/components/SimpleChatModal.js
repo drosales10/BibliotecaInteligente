@@ -19,20 +19,36 @@ const SimpleChatModal = ({ isOpen, onClose, book, ragStatus }) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${getBackendUrl()}/rag/query/`, {
+      const apiUrl = getBackendUrl();
+      console.log(`🤖 RAG: Enviando consulta a ${apiUrl}/rag/query/`);
+      
+      const response = await fetch(`${apiUrl}/rag/query/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: queryText, book_id: ragStatus.rag_book_id }),
+        body: JSON.stringify({ 
+          query: queryText, 
+          book_id: ragStatus.rag_book_id 
+        }),
       });
 
       if (response.ok) {
         const result = await response.json();
+        console.log('✅ RAG: Respuesta recibida:', result);
         setChatHistory(prev => [...prev, { sender: 'ai', text: result.response }]);
       } else {
-        setChatHistory(prev => [...prev, { sender: 'ai', text: 'Error al obtener respuesta' }]);
+        const errorData = await response.json();
+        console.error('❌ RAG: Error en consulta:', errorData);
+        setChatHistory(prev => [...prev, { 
+          sender: 'ai', 
+          text: `❌ Error: ${errorData.detail || 'Error desconocido en la consulta'}` 
+        }]);
       }
     } catch (error) {
-      setChatHistory(prev => [...prev, { sender: 'ai', text: 'Error de conexión' }]);
+      console.error('❌ RAG: Error de conexión:', error);
+      setChatHistory(prev => [...prev, { 
+        sender: 'ai', 
+        text: '❌ Error de conexión. Verifica que el backend esté funcionando.' 
+      }]);
     } finally {
       setIsLoading(false);
     }
@@ -102,7 +118,11 @@ const SimpleChatModal = ({ isOpen, onClose, book, ragStatus }) => {
               }}>
                 {chatHistory.length === 0 ? (
                   <div style={{ textAlign: 'center', color: '#6c757d', padding: '20px' }}>
-                    ¡Hola! Hazme cualquier pregunta sobre el libro.
+                    ¡Hola! Hazme cualquier pregunta sobre el libro "{book?.title}".
+                    <br />
+                    <small style={{ fontSize: '0.9rem', marginTop: '10px', display: 'block' }}>
+                      💡 Puedes preguntar sobre el contenido, personajes, temas, etc.
+                    </small>
                   </div>
                 ) : (
                   chatHistory.map((msg, index) => (
@@ -112,7 +132,8 @@ const SimpleChatModal = ({ isOpen, onClose, book, ragStatus }) => {
                       backgroundColor: msg.sender === 'user' ? '#007bff' : '#f8f9fa',
                       color: msg.sender === 'user' ? 'white' : '#2c3e50',
                       alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
-                      maxWidth: '80%'
+                      maxWidth: '80%',
+                      wordWrap: 'break-word'
                     }}>
                       {msg.text}
                     </div>
@@ -137,7 +158,7 @@ const SimpleChatModal = ({ isOpen, onClose, book, ragStatus }) => {
                   type="text"
                   value={currentQuery}
                   onChange={(e) => setCurrentQuery(e.target.value)}
-                  placeholder="Escribe tu pregunta..."
+                  placeholder="Escribe tu pregunta sobre el libro..."
                   disabled={isLoading}
                   style={{
                     flex: 1,

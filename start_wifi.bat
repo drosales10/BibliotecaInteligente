@@ -20,6 +20,7 @@ set USE_SSL=false
 set FRONTEND_HOST=192.168.100.6
 set FRONTEND_PORT=3000
 set ALLOWED_ORIGINS=http://192.168.100.6:3000,http://localhost:3000,http://127.0.0.1:3000
+REM BOOKS_PATH se lee desde .env
 
 echo 🔧 Configurando modo WIFI...
 echo   Frontend: http://192.168.100.6:3000

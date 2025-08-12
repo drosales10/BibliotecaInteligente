@@ -1,6 +1,6 @@
 .categories-container {
   width: 100%;
-  padding: var(--space-5);
+  padding: var(--space-1);
   box-sizing: border-box;
   background-color: var(--bg-primary);
   color: var(--text-primary);

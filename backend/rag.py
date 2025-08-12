@@ -7,34 +7,57 @@ import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
 import tiktoken
+import asyncio
 from rate_limiter import (
     call_gemini_embeddings_with_limit_sync,
     call_gemini_with_limit_sync,
     RateLimitExceeded
 )
+from gemini_config import (
+    get_gemini_config,
+    get_rag_config,
+    get_chroma_config,
+    get_optimized_prompt_template,
+    validate_api_key
+)
 
 # Load environment variables
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+# Validar API key
+if not validate_api_key():
+    print("⚠️ ADVERTENCIA: GEMINI_API_KEY no configurada o inválida")
+    print("   La funcionalidad RAG estará limitada")
+else:
+    print("✅ GEMINI_API_KEY configurada correctamente")
+
 genai.configure(api_key=GEMINI_API_KEY)
 
+# Obtener configuraciones optimizadas
+GEMINI_CONFIG = get_gemini_config()
+RAG_CONFIG = get_rag_config()
+CHROMA_CONFIG = get_chroma_config()
+
 # Initialize ChromaDB client with PERSISTENCE
-# Crear directorio para persistencia de embeddings
-PERSIST_DIRECTORY = "chroma_persistence"
+PERSIST_DIRECTORY = CHROMA_CONFIG["persistence_directory"]
 os.makedirs(PERSIST_DIRECTORY, exist_ok=True)
 
 print(f"🔒 ChromaDB configurado con persistencia en: {PERSIST_DIRECTORY}")
 
 # Cliente con persistencia
 client = chromadb.PersistentClient(path=PERSIST_DIRECTORY)
-collection = client.get_or_create_collection(name="book_rag_collection")
+collection = client.get_or_create_collection(
+    name=CHROMA_CONFIG["collection_name"],
+    metadata={"hnsw:space": CHROMA_CONFIG["distance_function"]}
+)
 
 print(f"✅ Colección RAG cargada: {collection.name}")
 print(f"📊 Total de embeddings almacenados: {collection.count()}")
 
-# Initialize Gemini embedding model
-EMBEDDING_MODEL = "models/text-embedding-004"
-GENERATION_MODEL = "models/gemini-2.0-flash"
+# Initialize Gemini models with optimized config
+EMBEDDING_MODEL = GEMINI_CONFIG["embedding_model"]
+GENERATION_MODEL = GEMINI_CONFIG["generation_model"]
 
 def get_rag_stats():
     """Obtiene estadísticas de la base de datos RAG."""
@@ -137,25 +160,40 @@ def extract_text_from_epub(file_path: str) -> str:
         return ""
     return "\n".join(text_content)
 
-def chunk_text(text: str, max_tokens: int = 1000) -> list[str]:
-    """Chunks text into smaller pieces based on token count."""
+def chunk_text(text: str, max_tokens: int = None) -> list[str]:
+    """Chunks text into smaller pieces based on token count with optimized settings."""
     if not text.strip():
         return []
+    
+    # Usar configuración optimizada si no se especifica max_tokens
+    if max_tokens is None:
+        max_tokens = RAG_CONFIG["chunk_size"]
+    
     tokenizer = tiktoken.encoding_for_model("gpt-3.5-turbo") # Using a common tokenizer for token counting
     tokens = tokenizer.encode(text)
     chunks = []
     current_chunk_tokens = []
+    
     for token in tokens:
         current_chunk_tokens.append(token)
         if len(current_chunk_tokens) >= max_tokens:
-            chunks.append(tokenizer.decode(current_chunk_tokens))
+            chunk_text = tokenizer.decode(current_chunk_tokens)
+            # Verificar longitud mínima del chunk
+            if len(chunk_text.strip()) >= RAG_CONFIG["min_chunk_length"]:
+                chunks.append(chunk_text)
             current_chunk_tokens = []
+    
+    # Agregar el último chunk si tiene contenido
     if current_chunk_tokens:
-        chunks.append(tokenizer.decode(current_chunk_tokens))
+        chunk_text = tokenizer.decode(current_chunk_tokens)
+        if len(chunk_text.strip()) >= RAG_CONFIG["min_chunk_length"]:
+            chunks.append(chunk_text)
+    
+    print(f"📝 Texto dividido en {len(chunks)} chunks de máximo {max_tokens} tokens")
     return chunks
 
 async def process_book_for_rag(file_path: str, book_id: str):
-    """Extracts text, chunks it, generates embeddings, and stores in ChromaDB."""
+    """Extracts text, chunks it, generates embeddings, and stores in ChromaDB with optimized settings."""
     
     # Verificar si el libro ya existe en RAG
     if check_book_exists(book_id):
@@ -174,43 +212,79 @@ async def process_book_for_rag(file_path: str, book_id: str):
     if not text.strip():
         raise ValueError("Could not extract text from the book.")
 
-    chunks = chunk_text(text)
+    # Usar configuración optimizada para chunking
+    chunks = chunk_text(text, RAG_CONFIG["chunk_size"])
     if not chunks:
         raise ValueError("Could not chunk text from the book.")
 
+    # Limitar el número de chunks por libro
+    if len(chunks) > RAG_CONFIG["max_chunks_per_book"]:
+        print(f"⚠️ Libro tiene {len(chunks)} chunks, limitando a {RAG_CONFIG['max_chunks_per_book']}")
+        chunks = chunks[:RAG_CONFIG["max_chunks_per_book"]]
+
     print(f"📝 Generando embeddings para {len(chunks)} chunks...")
     
+    # Procesar chunks en lotes optimizados
+    batch_size = RAG_CONFIG["batch_size"]
     successful_chunks = 0
-    for i, chunk in enumerate(chunks):
-        try:
-            embedding = get_embedding(chunk) # No await here
-            if embedding is not None: # Only add if embedding is not None
-                collection.add(
-                    embeddings=[embedding],
-                    documents=[chunk],
-                    metadatas=[{"book_id": book_id, "chunk_index": i}],
-                    ids=[f"{book_id}_chunk_{i}"]
-                )
-                successful_chunks += 1
-        except RateLimitExceeded as e:
-            print(f"⚠️ Rate limit alcanzado para chunk {i}: {e}")
-            # Continuar con el siguiente chunk en lugar de fallar completamente
-            continue
-        except Exception as e:
-            print(f"❌ Error procesando chunk {i}: {e}")
-            # Continuar con el siguiente chunk en lugar de fallar completamente
-            continue
+    total_chunks = len(chunks)
     
-    print(f"✅ Procesado {successful_chunks}/{len(chunks)} chunks para libro ID: {book_id}")
+    for batch_start in range(0, total_chunks, batch_size):
+        batch_end = min(batch_start + batch_size, total_chunks)
+        batch_chunks = chunks[batch_start:batch_end]
+        
+        print(f"🔄 Procesando lote {batch_start//batch_size + 1}: chunks {batch_start+1}-{batch_end} de {total_chunks}")
+        
+        batch_successful = 0
+        for i, chunk in enumerate(batch_chunks):
+            chunk_index = batch_start + i
+            try:
+                embedding = get_embedding(chunk)
+                if embedding is not None:
+                    collection.add(
+                        embeddings=[embedding],
+                        documents=[chunk],
+                        metadatas=[{"book_id": book_id, "chunk_index": chunk_index}],
+                        ids=[f"{book_id}_chunk_{chunk_index}"]
+                    )
+                    successful_chunks += 1
+                    batch_successful += 1
+                    print(f"✅ Chunk {chunk_index + 1}/{total_chunks} procesado exitosamente")
+                else:
+                    print(f"⚠️ Chunk {chunk_index + 1}/{total_chunks} generó embedding nulo, saltando")
+                    
+            except RateLimitExceeded as e:
+                print(f"⚠️ Rate limit alcanzado para chunk {chunk_index + 1}: {e}")
+                # El rate limiter ya maneja reintentos automáticamente
+                # Solo registrar el error y continuar
+                continue
+            except Exception as e:
+                print(f"❌ Error procesando chunk {chunk_index + 1}: {e}")
+                # Continuar con el siguiente chunk en lugar de fallar completamente
+                continue
+        
+        print(f"📊 Lote {batch_start//batch_size + 1} completado: {batch_successful}/{len(batch_chunks)} chunks exitosos")
+        
+        # Pausa entre lotes usando configuración optimizada
+        if batch_end < total_chunks:
+            print(f"⏳ Pausa de {RAG_CONFIG['batch_delay']}s entre lotes...")
+            await asyncio.sleep(RAG_CONFIG["batch_delay"])
+    
+    print(f"✅ Procesado {successful_chunks}/{total_chunks} chunks para libro ID: {book_id}")
     
     # Obtener estadísticas actualizadas
     stats = get_rag_stats()
     print(f"📊 Estadísticas RAG actualizadas: {stats}")
     
-    return {"status": "processed", "chunks_processed": successful_chunks, "total_chunks": len(chunks), "stats": stats}
+    return {
+        "status": "processed", 
+        "chunks_processed": successful_chunks, 
+        "total_chunks": total_chunks, 
+        "stats": stats
+    }
 
 async def query_rag(query: str, book_id: str):
-    """Queries the RAG system for answers based on the book content with rate limiting."""
+    """Queries the RAG system for answers based on the book content with rate limiting and optimized prompts."""
     try:
         print(f"🔍 Consulta recibida: '{query}' (longitud: {len(query)})")
         print(f"🔍 Book ID recibido: {book_id}")
@@ -228,10 +302,10 @@ async def query_rag(query: str, book_id: str):
             print(f"⚠️ Rate limit alcanzado para embedding de consulta: {e}")
             return f"⚠️ El sistema está ocupado procesando otras consultas. Por favor, espera un momento e intenta de nuevo. ({e})"
 
-        # Buscar chunks relevantes
+        # Buscar chunks relevantes usando configuración optimizada
         results = collection.query(
             query_embeddings=[query_embedding],
-            n_results=5, # Retrieve top 5 relevant chunks
+            n_results=CHROMA_CONFIG["max_results"],
             where={"book_id": book_id}
         )
 
@@ -241,20 +315,16 @@ async def query_rag(query: str, book_id: str):
             
         context = "\n\n".join(relevant_chunks)
 
-        prompt = f"""Eres un asistente útil que responde preguntas.
-Prioriza la información del Contexto proporcionado para responder a la pregunta.
-Si la información en el Contexto no es suficiente para responder la pregunta, utiliza tus conocimientos generales.
-Responde siempre en español.
+        # Usar prompt optimizado
+        prompt = get_optimized_prompt_template(context, query, is_global=False)
 
-Contexto:
-{context}
-
-Pregunta: {query}
-Respuesta:"""
-
-        # Usar rate limiter para la generación de respuesta
+        # Usar rate limiter para la generación de respuesta con configuración optimizada
         def _generate_response():
-            model = genai.GenerativeModel(GENERATION_MODEL)
+            model = genai.GenerativeModel(
+                GENERATION_MODEL,
+                generation_config=GEMINI_CONFIG["generation_config"],
+                safety_settings=GEMINI_CONFIG["safety_settings"]
+            )
             response = model.generate_content(prompt)
             return response.text
 
@@ -267,7 +337,7 @@ Respuesta:"""
         return f"❌ Ocurrió un error al procesar tu consulta: {str(e)}"
 
 async def query_rag_global(query: str):
-    """Queries the RAG system for answers based on ALL books content with rate limiting."""
+    """Queries the RAG system for answers based on ALL books content with rate limiting and optimized prompts."""
     try:
         print(f"🔍 Consulta global recibida: '{query}' (longitud: {len(query)})")
         
@@ -284,10 +354,10 @@ async def query_rag_global(query: str):
             print(f"⚠️ Rate limit alcanzado para embedding de consulta global: {e}")
             return f"⚠️ El sistema está ocupado procesando otras consultas. Por favor, espera un momento e intenta de nuevo. ({e})"
 
-        # Buscar chunks relevantes en TODA la base de datos (sin filtro de book_id)
+        # Buscar chunks relevantes en TODA la base de datos usando configuración optimizada
         results = collection.query(
             query_embeddings=[query_embedding],
-            n_results=10,  # Más chunks para contexto global
+            n_results=CHROMA_CONFIG["max_results"] * 2,  # Más chunks para contexto global
             # Sin where clause = búsqueda en toda la colección
         )
 
@@ -304,26 +374,16 @@ async def query_rag_global(query: str):
         
         context = "\n\n".join(relevant_chunks)
         
-        # Crear prompt específico para consultas globales
-        prompt = f"""Eres un asistente bibliotecario experto que responde preguntas basándose en el contenido de múltiples libros.
+        # Usar prompt optimizado para consultas globales
+        prompt = get_optimized_prompt_template(context, query, is_global=True)
 
-INSTRUCCIONES ESPECÍFICAS:
-1. Prioriza SIEMPRE la información del Contexto proporcionado
-2. Si la información del Contexto no es suficiente, puedes usar tus conocimientos generales
-3. Responde SIEMPRE en español
-4. Menciona de qué libros o temas proviene la información cuando sea relevante
-5. Proporciona respuestas completas y bien estructuradas
-
-Contexto (extraído de {len(book_sources)} libros diferentes):
-{context}
-
-Pregunta: {query}
-
-Respuesta:"""
-
-        # Usar rate limiter para la generación de respuesta
+        # Usar rate limiter para la generación de respuesta con configuración optimizada
         def _generate_response():
-            model = genai.GenerativeModel(GENERATION_MODEL)
+            model = genai.GenerativeModel(
+                GENERATION_MODEL,
+                generation_config=GEMINI_CONFIG["generation_config"],
+                safety_settings=GEMINI_CONFIG["safety_settings"]
+            )
             response = model.generate_content(prompt)
             return response.text
 
