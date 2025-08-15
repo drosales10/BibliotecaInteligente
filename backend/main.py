@@ -852,6 +852,27 @@ def delete_category_and_books(category_name: str, db: Session = Depends(get_db))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
+def get_book_file_path(book) -> str:
+    """
+    Obtiene la ruta completa del archivo de un libro
+    """
+    if not book.file_path:
+        return None
+    
+    # Si es ruta absoluta, verificar que exista
+    if os.path.isabs(book.file_path):
+        if os.path.exists(book.file_path):
+            return book.file_path
+        else:
+            return None
+    
+    # Si es ruta relativa, construir ruta completa usando BOOKS_PATH
+    absolute_path = os.path.join(BOOKS_PATH, book.file_path)
+    if os.path.exists(absolute_path):
+        return absolute_path
+    
+    return None
+
 @app.get("/api/books/download/{book_id}")
 def download_local_book(book_id: int, db: Session = Depends(get_db)):
     """
@@ -861,8 +882,9 @@ def download_local_book(book_id: int, db: Session = Depends(get_db)):
     if not book:
         raise HTTPException(status_code=404, detail="Libro no encontrado.")
     
-    # Verificar que el libro tenga un archivo local
-    if not book.file_path or not os.path.exists(book.file_path):
+    # Obtener la ruta completa del archivo
+    file_path = get_book_file_path(book)
+    if not file_path:
         raise HTTPException(
             status_code=404, 
             detail="El archivo del libro no está disponible localmente."
@@ -870,25 +892,25 @@ def download_local_book(book_id: int, db: Session = Depends(get_db)):
     
     try:
         # Determinar el tipo de archivo y nombre
-        file_ext = os.path.splitext(book.file_path)[1].lower()
+        file_ext = os.path.splitext(file_path)[1].lower()
         
         if file_ext == '.pdf':
             return FileResponse(
-                path=book.file_path,
+                path=file_path,
                 filename=f"{book.title}.pdf",
                 media_type='application/pdf',
                 content_disposition_type='inline'
             )
         elif file_ext == '.epub':
             return FileResponse(
-                path=book.file_path,
+                path=file_path,
                 filename=f"{book.title}.epub",
                 media_type='application/epub+zip',
                 content_disposition_type='attachment'
             )
         else:
             return FileResponse(
-                path=book.file_path,
+                path=file_path,
                 filename=f"{book.title}{file_ext}",
                 media_type='application/octet-stream',
                 content_disposition_type='attachment'
@@ -1409,6 +1431,8 @@ def process_single_book_local_async(file_path: str, static_dir: str, db: Session
             }
         
         # Guardar en base de datos (modo local)
+        # Solo guardar el nombre del archivo, no la ruta completa de la carpeta
+        filename_only = os.path.basename(file_path)
         book_result = crud.create_book_with_duplicate_check(
             db=db,
             title=analysis["title"],
@@ -1416,7 +1440,7 @@ def process_single_book_local_async(file_path: str, static_dir: str, db: Session
             category=analysis["category"],
             cover_image_url=cover_image_url,
             drive_info=None,  # No hay información de Drive en modo local
-            file_path=file_path  # Guardar ruta local
+            file_path=filename_only  # Guardar solo el nombre del archivo
         )
         
         if book_result["success"]:
@@ -1562,35 +1586,33 @@ async def upload_bulk_books(
                 }
             })
         
-        # Resumen de resultados
-        successful = [r for r in results if r["success"]]
-        failed = [r for r in results if not r["success"] and r.get("error") != "Duplicado detectado (verificación previa)" and r.get("error") != "Duplicado detectado (verificación rápida)" and r.get("error") != "Duplicado detectado (verificación final)"]
-        duplicates = [r for r in results if not r["success"] and (r.get("error") == "Duplicado detectado (verificación previa)" or r.get("error") == "Duplicado detectado (verificación rápida)" or r.get("error") == "Duplicado detectado (verificación final)")]
+        # Limpiar archivos temporales
+        cleanup_temp_files(temp_extract_dir)
         
-        return {
-            "message": f"Procesamiento completado. {len(successful)} libros procesados exitosamente, {len(failed)} fallaron, {len(duplicates)} duplicados detectados.",
-            "total_files": len(book_files),
-            "successful": len(successful),
-            "failed": len(failed),
-            "duplicates": len(duplicates),
-            "successful_books": successful,
-            "failed_files": failed,
-            "duplicate_files": duplicates,
-            "optimization_stats": stats
-        }
+        # Preparar respuesta
+        successful_uploads = [r for r in results if r.get("success")]
+        failed_uploads = [r for r in results if not r.get("success")]
         
-    except HTTPException:
-        raise
+        return schemas.BulkUploadResponse(
+            success=True,
+            message=f"Carga masiva completada. {len(successful_uploads)} libros subidos exitosamente, {len(failed_uploads)} fallaron.",
+            total_files=len(book_files),
+            successful_uploads=len(successful_uploads),
+            failed_uploads=len(failed_uploads),
+            results=results,
+            stats=stats
+        )
+        
     except Exception as e:
-        print(f"❌ Error durante la carga masiva: {e}")
-        raise HTTPException(status_code=500, detail=f"Error durante la carga masiva: {str(e)}")
-    finally:
-        # Limpiar directorio temporal
+        # Limpiar archivos temporales en caso de error
         if temp_extract_dir and os.path.exists(temp_extract_dir):
-            try:
-                shutil.rmtree(temp_extract_dir)
-            except OSError:
-                pass  # Ignorar errores de limpieza
+            cleanup_temp_files(temp_extract_dir)
+        
+        logger.error(f"Error en carga masiva: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error interno del servidor durante la carga masiva: {str(e)}"
+        )
 
 @app.post("/api/upload-bulk-local/", response_model=schemas.BulkUploadResponse)
 async def upload_bulk_books_local(
@@ -1694,35 +1716,33 @@ async def upload_bulk_books_local(
                 }
             })
         
-        # Resumen de resultados
-        successful = [r for r in results if r["success"]]
-        failed = [r for r in results if not r["success"] and r.get("error") != "Duplicado detectado (verificación previa)" and r.get("error") != "Duplicado detectado (verificación rápida)" and r.get("error") != "Duplicado detectado (verificación final)"]
-        duplicates = [r for r in results if not r["success"] and (r.get("error") == "Duplicado detectado (verificación previa)" or r.get("error") == "Duplicado detectado (verificación rápida)" or r.get("error") == "Duplicado detectado (verificación final)")]
+        # Limpiar archivos temporales
+        cleanup_temp_files(temp_extract_dir)
         
-        return {
-            "message": f"Procesamiento completado. {len(successful)} libros procesados exitosamente, {len(failed)} fallaron, {len(duplicates)} duplicados detectados.",
-            "total_files": len(book_files),
-            "successful": len(successful),
-            "failed": len(failed),
-            "duplicates": len(duplicates),
-            "successful_books": successful,
-            "failed_files": failed,
-            "duplicate_files": duplicates,
-            "optimization_stats": stats
-        }
+        # Preparar respuesta
+        successful_uploads = [r for r in results if r.get("success")]
+        failed_uploads = [r for r in results if not r.get("success")]
         
-    except HTTPException:
-        raise
+        return schemas.BulkUploadResponse(
+            success=True,
+            message=f"Carga masiva local completada. {len(successful_uploads)} libros procesados exitosamente, {len(failed_uploads)} fallaron.",
+            total_files=len(book_files),
+            successful_uploads=len(successful_uploads),
+            failed_uploads=len(failed_uploads),
+            results=results,
+            stats=stats
+        )
+        
     except Exception as e:
-        print(f"❌ Error durante la carga masiva local: {e}")
-        raise HTTPException(status_code=500, detail=f"Error durante la carga masiva local: {str(e)}")
-    finally:
-        # Limpiar directorio temporal
+        # Limpiar archivos temporales en caso de error
         if temp_extract_dir and os.path.exists(temp_extract_dir):
-            try:
-                shutil.rmtree(temp_extract_dir)
-            except OSError:
-                pass  # Ignorar errores de limpieza
+            cleanup_temp_files(temp_extract_dir)
+        
+        logger.error(f"Error en carga masiva local: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error interno del servidor durante la carga masiva local: {str(e)}"
+        )
 
 @app.post("/upload-folder/", response_model=schemas.BulkUploadResponse)
 async def upload_folder_books(
@@ -1945,8 +1965,19 @@ def cleanup_orphaned_files():
 def validate_book_file(file_path: str) -> bool:
     """Valida que un archivo de libro sea accesible y válido"""
     try:
-        if not os.path.exists(file_path):
+        if not file_path:
             return False
+        
+        # Si es ruta absoluta, verificar directamente
+        if os.path.isabs(file_path):
+            if not os.path.exists(file_path):
+                return False
+        else:
+            # Si es ruta relativa, construir ruta completa usando BOOKS_PATH
+            absolute_path = os.path.join(BOOKS_PATH, file_path)
+            if not os.path.exists(absolute_path):
+                return False
+            file_path = absolute_path
         
         # Verificar que el archivo sea legible
         with open(file_path, 'rb') as f:
@@ -1982,8 +2013,10 @@ def quick_duplicate_check(file_path: str, db: Session) -> dict:
         ).all()
         
         for book in similar_size_books:
-            if os.path.exists(book.file_path):
-                existing_size = os.path.getsize(book.file_path)
+            # Construir ruta completa para verificar existencia
+            book_file_path = get_book_file_path(book) if hasattr(book, 'id') else book.file_path
+            if book_file_path and os.path.exists(book_file_path):
+                existing_size = os.path.getsize(book_file_path)
                 if abs(existing_size - file_size) <= 1024:  # ±1KB
                     return {
                         "is_duplicate": True,
@@ -2585,14 +2618,16 @@ def sync_book_to_drive(book_data: dict, db: Session = Depends(get_db)):
             error_msg = f"El libro no tiene ruta de archivo configurada: {book_id}"
             print(f"❌ {error_msg}")
             raise HTTPException(status_code=404, detail=error_msg)
-            
-        if not os.path.exists(book.file_path):
-            error_msg = f"Archivo del libro no encontrado en: {book.file_path}"
+        
+        # Obtener la ruta completa del archivo
+        file_path = get_book_file_path(book)
+        if not file_path:
+            error_msg = f"Archivo del libro no encontrado: {book.file_path}"
             print(f"❌ {error_msg}")
             raise HTTPException(status_code=404, detail=error_msg)
         
-        print(f"✅ Archivo encontrado: {book.file_path}")
-        print(f"📏 Tamaño del archivo: {os.path.getsize(book.file_path)} bytes")
+        print(f"✅ Archivo encontrado: {file_path}")
+        print(f"📏 Tamaño del archivo: {os.path.getsize(file_path)} bytes")
         
         # Obtener Google Drive Manager
         print("🔍 Obteniendo Google Drive Manager...")
@@ -2609,7 +2644,7 @@ def sync_book_to_drive(book_data: dict, db: Session = Depends(get_db)):
         # Subir a Google Drive
         print(f"🔄 Subiendo libro a Google Drive: {title}")
         result = drive_manager.upload_book_to_drive(
-            book.file_path,
+            file_path,
             title,
             author,
             category
@@ -2650,11 +2685,11 @@ def sync_book_to_drive(book_data: dict, db: Session = Depends(get_db)):
         # Eliminar archivo local después de actualizar la base de datos
         print("🔄 Eliminando archivo local...")
         try:
-            if os.path.exists(book.file_path):
-                os.remove(book.file_path)
-                print(f"✅ Archivo local eliminado: {book.file_path}")
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"✅ Archivo local eliminado: {file_path}")
             else:
-                print(f"⚠️ Archivo local ya no existe: {book.file_path}")
+                print(f"⚠️ Archivo local ya no existe: {file_path}")
                 
             # Eliminar imagen de portada local si existe
             if book.cover_image_url and os.path.exists(book.cover_image_url):
@@ -3435,12 +3470,17 @@ async def open_local_book(
             raise HTTPException(status_code=404, detail="Libro no encontrado")
         
         # Verificar que el libro tiene archivo local
-        if not book.file_path or not os.path.exists(book.file_path):
+        if not book.file_path:
+            raise HTTPException(status_code=404, detail="Archivo del libro no encontrado")
+        
+        # Obtener la ruta completa del archivo
+        file_path = get_book_file_path(book)
+        if not file_path:
             raise HTTPException(status_code=404, detail="Archivo del libro no encontrado")
         
         # Servir el archivo
         return FileResponse(
-            book.file_path,
+            file_path,
             media_type='application/octet-stream',
             filename=os.path.basename(book.file_path)
         )
@@ -4101,8 +4141,8 @@ async def upload_book_for_rag(file: UploadFile = File(...), db: Session = Depend
                 }
             else:
                 # Existe pero no procesado para RAG, usar el archivo existente si está disponible
-                if existing_book.file_path and os.path.exists(existing_book.file_path):
-                    file_to_process = existing_book.file_path
+                if existing_book.file_path:
+                    file_to_process = get_book_file_path(existing_book) or file_location
                 else:
                     file_to_process = file_location
                 
@@ -4366,20 +4406,9 @@ async def process_existing_book_for_rag(book_id: int, db: Session = Depends(get_
         
         # Determinar la ruta del archivo
         if book.file_path:
-            # Verificar si es ruta absoluta o relativa
-            if os.path.isabs(book.file_path):
-                # Ruta absoluta
-                if os.path.exists(book.file_path):
-                    file_path = book.file_path
-                else:
-                    raise HTTPException(status_code=400, detail=f"Archivo no encontrado en ruta absoluta: {book.file_path}")
-            else:
-                # Ruta relativa, construir ruta completa usando BOOKS_PATH
-                absolute_path = os.path.join(BOOKS_PATH, book.file_path.replace('books\\', '').replace('books/', ''))
-                if os.path.exists(absolute_path):
-                    file_path = absolute_path
-                else:
-                    raise HTTPException(status_code=400, detail=f"Archivo no encontrado en ruta relativa: {absolute_path}")
+            file_path = get_book_file_path(book)
+            if not file_path:
+                raise HTTPException(status_code=400, detail=f"Archivo no encontrado: {book.file_path}")
         elif book.drive_file_id:
             # Descargar desde Google Drive
             temp_file_name = f"temp_rag_{book_id}_{book.drive_filename}"

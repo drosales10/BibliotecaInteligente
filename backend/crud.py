@@ -310,12 +310,16 @@ def delete_book(db: Session, book_id: int):
                 logger.warning(f"Error al eliminar portada de Google Drive: {e}")
         
         # Limpiar archivo temporal local si existe
-        if book.file_path and os.path.exists(book.file_path):
-            try:
-                os.remove(book.file_path)
-                logger.info(f"Archivo temporal eliminado: {book.file_path}")
-            except OSError as e:
-                logger.warning(f"No se pudo eliminar el archivo temporal {book.file_path}: {e}")
+        if book.file_path:
+            # Construir ruta completa para verificar existencia
+            from main import get_book_file_path
+            book_file_path = get_book_file_path(book)
+            if book_file_path and os.path.exists(book_file_path):
+                try:
+                    os.remove(book_file_path)
+                    logger.info(f"Archivo temporal eliminado: {book_file_path}")
+                except OSError as e:
+                    logger.warning(f"No se pudo eliminar el archivo temporal {book_file_path}: {e}")
         
         # Eliminar imagen de portada local si existe
         if book.cover_image_url and os.path.exists(book.cover_image_url):
@@ -385,12 +389,16 @@ def delete_books_by_category(db: Session, category: str):
                     logger.warning(f"Error al eliminar portada de Google Drive: {e}")
             
             # Limpiar archivo temporal local si existe
-            if book.file_path and os.path.exists(book.file_path):
-                try:
-                    os.remove(book.file_path)
-                    logger.info(f"Archivo temporal eliminado: {book.file_path}")
-                except OSError as e:
-                    logger.warning(f"No se pudo eliminar el archivo temporal {book.file_path}: {e}")
+            if book.file_path:
+                # Construir ruta completa para verificar existencia
+                from main import get_book_file_path
+                book_file_path = get_book_file_path(book)
+                if book_file_path and os.path.exists(book_file_path):
+                    try:
+                        os.remove(book_file_path)
+                        logger.info(f"Archivo temporal eliminado: {book_file_path}")
+                    except OSError as e:
+                        logger.warning(f"No se pudo eliminar el archivo temporal {book_file_path}: {e}")
             
             # Eliminar imagen de portada local si existe
             if book.cover_image_url and os.path.exists(book.cover_image_url):
@@ -599,7 +607,9 @@ def can_book_be_processed_for_rag(book: models.Book) -> bool:
         return False
     
     # Verificar si tiene archivo local disponible
-    has_local_file = book.file_path and os.path.exists(book.file_path)
+    from main import get_book_file_path
+    book_file_path = get_book_file_path(book) if book.file_path else None
+    has_local_file = book_file_path is not None
     
     # Verificar si tiene archivo en Google Drive
     has_drive_file = book.drive_file_id is not None and book.drive_filename is not None

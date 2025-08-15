@@ -43,12 +43,15 @@ def test_book_sync(book_id=506):
             print("❌ El libro no tiene ruta de archivo configurada")
             return False
             
-        if not os.path.exists(book.file_path):
+        # Construir ruta completa para verificar existencia
+        from main import get_book_file_path
+        book_file_path = get_book_file_path(book)
+        if not book_file_path or not os.path.exists(book_file_path):
             print(f"❌ El archivo no existe en la ruta: {book.file_path}")
             return False
             
-        print(f"✅ Archivo encontrado en: {book.file_path}")
-        print(f"📏 Tamaño del archivo: {os.path.getsize(book.file_path)} bytes")
+        print(f"✅ Archivo encontrado en: {book_file_path}")
+        print(f"📏 Tamaño del archivo: {os.path.getsize(book_file_path)} bytes")
         
         # Verificar Google Drive Manager
         print("\n🔍 Verificando Google Drive Manager...")
@@ -72,7 +75,7 @@ def test_book_sync(book_id=506):
         print(f"\n🔄 Intentando sincronizar libro: {book.title}")
         
         result = drive_manager.upload_book_to_drive(
-            book.file_path,
+            book_file_path,
             book.title,
             book.author,
             book.category or "Sin categoría"

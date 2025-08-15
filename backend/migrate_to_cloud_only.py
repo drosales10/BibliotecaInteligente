@@ -56,7 +56,10 @@ def get_books_with_local_files():
             for i, book in enumerate(books[:10], 1):
                 print(f"  {i}. {book.title} - {book.author}")
                 print(f"     Archivo: {book.file_path}")
-                print(f"     Existe: {os.path.exists(book.file_path) if book.file_path else 'N/A'}")
+                # Construir ruta completa para verificar existencia
+                from main import get_book_file_path
+                book_file_path = get_book_file_path(book) if book.file_path else None
+                print(f"     Existe: {os.path.exists(book_file_path) if book_file_path else 'N/A'}")
                 print()
             
             if len(books) > 10:
@@ -77,12 +80,16 @@ def migrate_book_to_cloud_only(book):
             return False
         
         # Eliminar archivo local si existe
-        if book.file_path and os.path.exists(book.file_path):
-            try:
-                os.remove(book.file_path)
-                print(f"🗑️ Archivo local eliminado: {book.file_path}")
-            except OSError as e:
-                print(f"⚠️ No se pudo eliminar archivo local: {e}")
+        if book.file_path:
+            # Construir ruta completa para verificar existencia
+            from main import get_book_file_path
+            book_file_path = get_book_file_path(book)
+            if book_file_path and os.path.exists(book_file_path):
+                try:
+                    os.remove(book_file_path)
+                    print(f"🗑️ Archivo local eliminado: {book_file_path}")
+                except OSError as e:
+                    print(f"⚠️ No se pudo eliminar archivo local: {e}")
         
         # Limpiar imagen de portada local si existe
         if book.cover_image_url and os.path.exists(book.cover_image_url):

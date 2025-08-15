@@ -85,6 +85,28 @@ Mi Biblioteca Inteligente es una aplicación web avanzada que utiliza la IA mult
 - **Google Drive:** Almacenamiento principal en la nube
 - **Sistema de Caché:** Optimización de rendimiento
 
+## 🔧 Correcciones Recientes
+
+### ✅ **Problema de Rutas de Archivos Resuelto**
+Se ha corregido un problema donde los libros se subían incluyendo la ruta completa de la carpeta (ej: `ebooks/libro.pdf`), lo que dificultaba cambiar la ubicación de los archivos. 
+
+**Solución implementada:**
+- Los libros ahora se guardan solo con el nombre del archivo (ej: `libro.pdf`)
+- Script de migración disponible para corregir registros existentes
+- Compatible con cambio de carpetas y reorganización de archivos
+
+**Para aplicar la corrección a libros existentes:**
+```bash
+# En Windows
+migrate_file_paths.bat
+
+# En Linux/Mac
+cd backend
+python migrate_file_paths.py
+```
+
+**Documentación completa:** [docs/correccion-rutas-archivos.md](docs/correccion-rutas-archivos.md)
+
 ## 🚀 Instalación y Puesta en Marcha
 
 ### Prerrequisitos

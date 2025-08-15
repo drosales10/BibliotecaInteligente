@@ -46,7 +46,7 @@ echo.
 pause
 
 echo 🚀 Abriendo Backend LOCAL...
-start "Backend LOCAL" cmd /k "cd backend && python start_server.py"
+start "Backend LOCAL" cmd /k "cd backend && set HOST=localhost && set PORT=8001 && set USE_SSL=false && set ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000 && set BOOKS_PATH=E:\books && python start_server.py"
 
 timeout /t 3 /nobreak >nul
 

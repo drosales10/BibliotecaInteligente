@@ -68,13 +68,15 @@ def migrate_book_to_drive(book):
     """Migra un libro individual a Google Drive"""
     try:
         # Verificar que el archivo existe
-        if not os.path.exists(book.file_path):
+        from main import get_book_file_path
+        book_file_path = get_book_file_path(book)
+        if not book_file_path or not os.path.exists(book_file_path):
             print(f"⚠️ Archivo no encontrado: {book.file_path}")
             return False
         
         # Subir a Google Drive
         drive_info = drive_manager.upload_book_to_drive(
-            file_path=book.file_path,
+            file_path=book_file_path,
             title=book.title,
             author=book.author,
             category=book.category

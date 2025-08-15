@@ -20,7 +20,7 @@ set USE_SSL=true
 set FRONTEND_HOST=100.81.201.68
 set FRONTEND_PORT=3000
 set ALLOWED_ORIGINS=http://100.81.201.68:3000,https://100.81.201.68:3000,http://localhost:3000,https://localhost:3000
-REM BOOKS_PATH se lee desde .env
+set BOOKS_PATH=E:\books
 
 echo 🔧 Configurando modo TAILSCALE...
 echo   Frontend: http://100.81.201.68:3000
@@ -60,7 +60,7 @@ echo.
 pause
 
 echo 🚀 Abriendo Backend TAILSCALE...
-start "Backend TAILSCALE" cmd /k "cd backend && set HOST=100.81.201.68 && set PORT=8001 && set USE_SSL=true && set ALLOWED_ORIGINS=http://100.81.201.68:3000,https://100.81.201.68:3000,http://localhost:3000,https://localhost:3000 && python start_server.py"
+start "Backend TAILSCALE" cmd /k "cd backend && set HOST=100.81.201.68 && set PORT=8001 && set USE_SSL=true && set ALLOWED_ORIGINS=http://100.81.201.68:3000,https://100.81.201.68:3000,http://localhost:3000,https://localhost:3000 && set BOOKS_PATH=E:\books && python start_server.py"
 
 timeout /t 5 /nobreak >nul
 
