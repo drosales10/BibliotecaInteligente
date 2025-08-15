@@ -14,13 +14,13 @@ echo.
 
 REM Configurar variables de entorno para modo LOCAL
 set MODE=LOCAL
-REM set HOST=localhost
-REM set PORT=8001
-REM set USE_SSL=false
-REM set FRONTEND_HOST=localhost
-REM set FRONTEND_PORT=3000
-REM set ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-REM set BOOKS_PATH=E:\books
+set HOST=localhost
+set PORT=8001
+set USE_SSL=false
+set FRONTEND_HOST=localhost
+set FRONTEND_PORT=3000
+set ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+set BOOKS_PATH=E:\books
 
 echo 🔧 Configurando modo LOCAL...
 echo   Frontend: http://localhost:3000
